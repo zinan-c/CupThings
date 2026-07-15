@@ -55,7 +55,7 @@ MVP identity is anonymous and browser-bound. After the user submits a display na
 - `GET /cup-things/:id`: fetch one record.
 - `PATCH /cup-things/:id`: update one record.
 - `DELETE /cup-things/:id`: delete one record.
-- `GET /reviews`: return records and simple stats for a date range.
+- `GET /reviews`: return records and simple stats for a date range, optionally filtered by `category`.
 
 All endpoints except `POST /profiles` require `Authorization: Bearer <token>`.
 

@@ -128,6 +128,15 @@ test("CupThing CRUD, filtering, review stats, profile isolation, and malformed U
   assert.equal(review.json().stats.countByCategory.coffee, 1);
   assert.equal(review.json().stats.averageRating, 5);
 
+  const categoryReview = await app.inject({
+    method: "GET",
+    url: `/reviews?category=coffee&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    headers: auth(first.token)
+  });
+  assert.equal(categoryReview.statusCode, 200);
+  assert.equal(categoryReview.json().records.length, 1);
+  assert.equal(categoryReview.json().stats.averageRating, 5);
+
   const deleteResponse = await app.inject({
     method: "DELETE",
     url: `/cup-things/${created.id}`,

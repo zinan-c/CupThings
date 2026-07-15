@@ -68,6 +68,7 @@ export const cupThingListQuerySchema = z.object({
 );
 
 export const reviewQuerySchema = z.object({
+  category: cupThingCategorySchema.optional(),
   from: isoDateTimeSchema,
   to: isoDateTimeSchema
 }).refine(

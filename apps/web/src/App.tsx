@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { ArrowLeft, CalendarDays, Check, Edit3, Plus, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarDays, Check, Edit3, Plus, Search, Star, Trash2 } from "lucide-react";
 import type {
   CreateCupThingInput,
   CupThing,
@@ -21,7 +21,7 @@ import {
   setToken,
   updateCupThing
 } from "./api";
-import { categoryLabels, categoryOptions, ratingOptions } from "./constants";
+import { categoryLabels, categoryOptions } from "./constants";
 import {
   endOfLocalDayIso,
   formatDate,
@@ -125,7 +125,10 @@ function Shell({ title, action, children }: { title: string; action?: ReactNode;
   return (
     <main className="appShell">
       <header className="shellHeader">
-        <span className="brand">{title}</span>
+        <div className="brandLockup">
+          <span className="brand">{title}</span>
+          <span className="brandSlogan">A pocket log for cups, bites, and memorable tastes.</span>
+        </div>
         {action}
       </header>
       {children}
@@ -156,9 +159,12 @@ function Welcome({ onReady }: { onReady: (profile: Profile) => void }) {
   return (
     <Shell title="CupThings">
       <section className="welcome">
-        <p className="eyebrow">First visit</p>
-        <h1>Start your personal taste log</h1>
-        <form className="panel narrow" onSubmit={submit}>
+        <div className="welcomeCopy">
+          <p className="eyebrow">First visit</p>
+          <h1>Start your personal taste log</h1>
+          <p className="muted">Keep simple notes on the drinks and desserts you want to remember.</p>
+        </div>
+        <form className="panel welcomePanel" onSubmit={submit}>
           <label>
             Display name
             <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Nic" autoFocus />
@@ -257,7 +263,7 @@ function RecordList({ records, onOpen }: { records: CupThing[]; onOpen: (id: str
           </span>
           <span className="rowMeta">
             <span className={`pill ${record.category}`}>{categoryLabels[record.category]}</span>
-            {record.rating && <span className="rating">{record.rating.toFixed(1)}</span>}
+            {record.rating && <RatingDisplay rating={record.rating} compact />}
           </span>
         </button>
       ))}
@@ -309,7 +315,10 @@ function DetailView({ id, onNavigate }: { id: string; onNavigate: (view: View) =
       </div>
       {deleteError && <p className="error">{deleteError}</p>}
       <dl className="detailsGrid">
-        <DetailItem label="Rating" value={record.rating ? record.rating.toFixed(1) : "Not rated"} />
+        <div>
+          <dt>Rating</dt>
+          <dd>{record.rating ? <RatingDisplay rating={record.rating} /> : "Not rated"}</dd>
+        </div>
         <DetailItem label="Location" value={record.location ?? "Not set"} />
         <DetailItem label="Style" value={record.style ?? "Not set"} />
         <DetailItem label="Flavors" value={record.flavors.length ? record.flavors.join(", ") : "Not set"} />
@@ -425,10 +434,10 @@ function CupThingForm({
       </label>
       <label>
         Rating
-        <select value={values.rating} onChange={(event) => setValues({ ...values, rating: event.target.value })}>
-          <option value="">Not rated</option>
-          {ratingOptions.map((rating) => <option key={rating} value={rating}>{rating.toFixed(1)}</option>)}
-        </select>
+        <StarRatingInput
+          value={values.rating ? Number(values.rating) : undefined}
+          onChange={(rating) => setValues({ ...values, rating: rating == null ? "" : String(rating) })}
+        />
       </label>
       <label className="wide">
         Flavors
@@ -450,6 +459,7 @@ function CupThingForm({
 function ReviewView({ onOpen }: { onOpen: (id: string) => void }) {
   const [from, setFrom] = useState(todayDateInputValue());
   const [to, setTo] = useState(todayDateInputValue());
+  const [category, setCategory] = useState<"" | CupThingCategory>("");
   const [review, setReview] = useState<ReviewResponse | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -458,7 +468,7 @@ function ReviewView({ onOpen }: { onOpen: (id: string) => void }) {
     setLoading(true);
     setError("");
     try {
-      setReview(await getReview(startOfLocalDayIso(from), endOfLocalDayIso(to)));
+      setReview(await getReview(startOfLocalDayIso(from), endOfLocalDayIso(to), category || undefined));
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not load review");
     } finally {
@@ -473,6 +483,13 @@ function ReviewView({ onOpen }: { onOpen: (id: string) => void }) {
   return (
     <section className="viewStack">
       <div className="filters">
+        <label>
+          Category
+          <select value={category} onChange={(event) => setCategory(event.target.value as "" | CupThingCategory)}>
+            <option value="">All</option>
+            {categoryOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
         <label>From<input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
         <label>To<input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label>
         <button className="primaryButton" onClick={loadReview}><CalendarDays size={18} /> Review</button>
@@ -483,7 +500,7 @@ function ReviewView({ onOpen }: { onOpen: (id: string) => void }) {
         <>
           <div className="statsGrid">
             <StatCard label="Total records" value={String(review.stats.totalCount)} />
-            <StatCard label="Average rating" value={review.stats.averageRating == null ? "None" : review.stats.averageRating.toFixed(1)} />
+            {category && <StatCard label="Average rating" value={review.stats.averageRating == null ? "None" : review.stats.averageRating.toFixed(1)} />}
             {categoryOptions.map(([category, label]) => <StatCard key={category} label={label} value={String(review.stats.countByCategory[category])} />)}
           </div>
           {review.records.length ? (
@@ -494,6 +511,38 @@ function ReviewView({ onOpen }: { onOpen: (id: string) => void }) {
         </>
       )}
     </section>
+  );
+}
+
+function StarRatingInput({ value, onChange }: { value?: number; onChange: (rating: number | undefined) => void }) {
+  return (
+    <div className="starRating" role="radiogroup" aria-label="Rating">
+      {[1, 2, 3, 4, 5].map((rating) => (
+        <button
+          type="button"
+          key={rating}
+          className={value && rating <= value ? "starButton selected" : "starButton"}
+          aria-label={`${rating} star${rating === 1 ? "" : "s"}`}
+          aria-checked={value === rating}
+          role="radio"
+          onClick={() => onChange(value === rating ? undefined : rating)}
+        >
+          <Star size={24} />
+        </button>
+      ))}
+      {value && <button type="button" className="clearRatingButton" onClick={() => onChange(undefined)}>Clear</button>}
+    </div>
+  );
+}
+
+function RatingDisplay({ rating, compact = false }: { rating: number; compact?: boolean }) {
+  return (
+    <span className={compact ? "ratingDisplay compact" : "ratingDisplay"} aria-label={`${rating.toFixed(1)} out of 5`}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Star key={star} size={compact ? 14 : 17} className={star <= Math.round(rating) ? "filled" : ""} />
+      ))}
+      {!compact && <span>{rating.toFixed(1)}</span>}
+    </span>
   );
 }
 

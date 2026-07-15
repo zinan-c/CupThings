@@ -17,6 +17,7 @@ export async function registerReviewRoutes(app: FastifyInstance) {
         .where(
           and(
             eq(cupThings.profileId, request.profile.id),
+            query.category ? eq(cupThings.category, query.category) : undefined,
             gte(cupThings.consumedAt, new Date(query.from)),
             lte(cupThings.consumedAt, new Date(query.to))
           )

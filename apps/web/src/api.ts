@@ -124,7 +124,8 @@ export async function deleteCupThing(id: string) {
   });
 }
 
-export async function getReview(from: string, to: string) {
+export async function getReview(from: string, to: string, category?: CupThingCategory) {
   const params = new URLSearchParams({ from, to });
+  if (category) params.set("category", category);
   return request<ReviewResponse>(`/reviews?${params.toString()}`);
 }
