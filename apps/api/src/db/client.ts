@@ -1,14 +1,11 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
+import { loadEnvFile, requireEnv } from "../env.js";
 import * as schema from "./schema.js";
 
 const { Pool } = pg;
 
-const connectionString = process.env.DATABASE_URL;
+loadEnvFile();
 
-if (!connectionString) {
-  throw new Error("DATABASE_URL is required");
-}
-
-export const pool = new Pool({ connectionString });
+export const pool = new Pool({ connectionString: requireEnv("DATABASE_URL") });
 export const db = drizzle(pool, { schema });

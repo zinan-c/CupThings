@@ -1,0 +1,1 @@
+ALTER TABLE "cup_things" ADD CONSTRAINT "cup_things_rating_half_steps_range" CHECK ("cup_things"."rating_half_steps" is null or ("cup_things"."rating_half_steps" between 2 and 10));

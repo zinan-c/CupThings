@@ -26,7 +26,15 @@ type RequestOptions = {
   method?: string;
   body?: unknown;
   auth?: boolean;
+  signal?: AbortSignal;
 };
+
+export class AuthRequiredError extends Error {
+  constructor() {
+    super("AUTH_REQUIRED");
+    this.name = "AuthRequiredError";
+  }
+}
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers();
@@ -43,12 +51,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const response = await fetch(`${API_URL}${path}`, {
     method: options.method ?? "GET",
     headers,
-    body: options.body == null ? undefined : JSON.stringify(options.body)
+    body: options.body == null ? undefined : JSON.stringify(options.body),
+    signal: options.signal
   });
 
   if (response.status === 401) {
     clearToken();
-    throw new Error("AUTH_REQUIRED");
+    window.dispatchEvent(new Event("cupthings:auth-required"));
+    throw new AuthRequiredError();
   }
 
   if (!response.ok) {
@@ -79,13 +89,15 @@ export async function listCupThings(filters: {
   category?: CupThingCategory;
   from?: string;
   to?: string;
-}) {
+}, options: { signal?: AbortSignal } = {}) {
   const params = new URLSearchParams();
   if (filters.category) params.set("category", filters.category);
   if (filters.from) params.set("from", filters.from);
   if (filters.to) params.set("to", filters.to);
   const query = params.toString();
-  return request<{ cupThings: CupThing[] }>(`/cup-things${query ? `?${query}` : ""}`);
+  return request<{ cupThings: CupThing[] }>(`/cup-things${query ? `?${query}` : ""}`, {
+    signal: options.signal
+  });
 }
 
 export async function getCupThing(id: string) {

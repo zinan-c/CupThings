@@ -7,7 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --noEmit",
-    "test": "tsc -b --noEmit"
+    "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
     "@cupthings/shared": "workspace:*",
@@ -20,6 +20,7 @@
   "devDependencies": {
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
 }

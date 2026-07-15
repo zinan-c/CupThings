@@ -16,7 +16,7 @@ This document records review findings that should remain visible across agent se
 
 ### CR-001 — API `.env` files are not loaded automatically
 
-- Status: Open
+- Status: Resolved
 - Priority: P1
 - Affected files:
   - `apps/api/package.json`
@@ -34,9 +34,16 @@ Recommended resolution:
 2. Remove the implicit production-capable database fallback from `drizzle.config.ts`, or restrict it explicitly to local development.
 3. Verify the documented setup from a clean shell where `DATABASE_URL` is not already exported.
 
+Resolution:
+
+- Added a small API env loader used by both the runtime database client and Drizzle config.
+- Removed the implicit Drizzle database fallback; `DATABASE_URL` is now required.
+- Verified Drizzle migration and API database client loading from `apps/api/.env` without an exported `DATABASE_URL`.
+- Resolving commit: `ec9b91c`.
+
 ### CR-002 — A runtime 401 leaves stale authenticated UI state
 
-- Status: Open
+- Status: Resolved
 - Priority: P2
 - Affected files:
   - `apps/web/src/api.ts`
@@ -49,9 +56,15 @@ Recommended resolution:
 - Introduce a dedicated authentication error and handle it at the application boundary, or dispatch a centralized auth-required event that clears the profile and returns the user to the welcome screen.
 - Add a test for a token that becomes invalid after initial profile loading.
 
+Resolution:
+
+- Added a dedicated `AuthRequiredError` and centralized auth-required browser event.
+- `App` now clears in-memory profile state and returns to the welcome flow when any request receives 401.
+- Resolving commit: `ec9b91c`.
+
 ### CR-003 — Malformed CupThing IDs return 500
 
-- Status: Open
+- Status: Resolved
 - Priority: P2
 - Affected files:
   - `apps/api/src/routes/cup-things.ts`
@@ -65,9 +78,16 @@ Recommended resolution:
 - Parse all three `/:id` routes before querying PostgreSQL.
 - Return a consistent 400 response for malformed IDs and retain 404 for valid but unknown UUIDs.
 
+Resolution:
+
+- Added shared UUID param schema.
+- Detail, update, and delete routes now validate IDs before database queries.
+- Added API coverage for malformed UUID returning 400 and cross-profile valid UUID returning 404.
+- Resolving commit: `ec9b91c`.
+
 ### CR-004 — Fresh-clone type checking depends on generated shared output
 
-- Status: Open
+- Status: Resolved
 - Priority: P2
 - Affected files:
   - `package.json`
@@ -82,9 +102,15 @@ Recommended resolution: choose one workspace-wide approach and verify it from a 
 - Add TypeScript project references; or
 - Use development path aliases that resolve shared source directly.
 
+Resolution:
+
+- Updated root `build`, `typecheck`, and `test` scripts to build shared output before dependent package checks.
+- Verified workspace `typecheck` from the root script.
+- Resolving commit: `ec9b91c`.
+
 ### CR-005 — `test` scripts do not run tests
 
-- Status: Open
+- Status: Resolved
 - Priority: P2
 - Affected files:
   - `package.json`
@@ -105,9 +131,16 @@ Minimum recommended coverage:
 - Malformed UUID handling.
 - Frontend local-date-to-UTC conversion.
 
+Resolution:
+
+- Added Node test coverage for API profile creation, token hashing, missing/invalid tokens, profile isolation, CRUD, filtering, rating validation, Review stats, deletion, and malformed UUIDs.
+- Added frontend date helper tests for whole-day ranges and datetime-local conversion.
+- Updated package test scripts to run behavior tests.
+- Resolving commit: `ec9b91c`.
+
 ### CR-006 — Delete failures are not represented in the UI
 
-- Status: Open
+- Status: Resolved
 - Priority: P3
 - Affected file: `apps/web/src/App.tsx`
 
@@ -117,9 +150,14 @@ Recommended resolution:
 
 - Add a deleting state, disable repeated clicks, catch the failure, and render an actionable error.
 
+Resolution:
+
+- Detail view now tracks deleting state, disables repeated delete clicks, catches delete failures, and renders the error while preserving the detail view.
+- Resolving commit: `ec9b91c`.
+
 ### CR-007 — Record filter requests can resolve out of order
 
-- Status: Open
+- Status: Resolved
 - Priority: P3
 - Affected file: `apps/web/src/App.tsx`
 
@@ -129,9 +167,14 @@ Recommended resolution:
 
 - Cancel obsolete requests with `AbortController`, or track a request generation ID and ignore stale responses.
 
+Resolution:
+
+- List filtering now uses `AbortController` plus an active request guard so obsolete responses cannot overwrite current list state.
+- Resolving commit: `ec9b91c`.
+
 ### CR-008 — Database rating constraints rely only on the API
 
-- Status: Open
+- Status: Resolved
 - Priority: P3
 - Affected files:
   - `apps/api/src/db/schema.ts`
@@ -142,6 +185,12 @@ Zod validates ratings at the API boundary, but PostgreSQL does not enforce the e
 Recommended resolution:
 
 - Add a nullable check constraint requiring `rating_half_steps` to be between 2 and 10.
+
+Resolution:
+
+- Added Drizzle schema check constraint and generated migration `0001_nappy_iron_fist.sql`.
+- Applied migration locally and verified PostgreSQL rejects `rating_half_steps = 11` while leaving no temporary data.
+- Resolving commit: `ec9b91c`.
 
 ## Deferred refinements
 
@@ -172,7 +221,16 @@ The README should eventually include the following sections:
 - Web TypeScript check passed.
 - Web production build passed.
 - A separate runtime validation recorded in `WORK_LOG.md` confirmed migrations, profile creation, CupThing CRUD, filtered listing, Review statistics, deletion, and 404-after-delete behavior.
-- No automated behavior tests currently exist.
+- Automated behavior tests now cover API and frontend date helpers.
+
+## Verification performed during resolution
+
+- Workspace `typecheck` passed.
+- Workspace `test` passed against local PostgreSQL.
+- Workspace `build` passed.
+- Drizzle migration from `apps/api/.env` passed without exported `DATABASE_URL`.
+- API database client runtime `.env` load check returned `{ ok: 1 }`.
+- PostgreSQL rating check constraint rejected an invalid manual insert and left no temporary profile.
 
 ## Resolution workflow
 

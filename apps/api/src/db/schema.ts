@@ -1,5 +1,5 @@
-import { relations } from "drizzle-orm";
-import { index, pgEnum, pgTable, text, timestamp, uuid, integer } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
+import { check, index, pgEnum, pgTable, text, timestamp, uuid, integer } from "drizzle-orm/pg-core";
 
 const cupThingCategories = ["coffee", "wine", "dessert", "other"] as const;
 
@@ -30,6 +30,10 @@ export const cupThings = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => ({
+    ratingRange: check(
+      "cup_things_rating_half_steps_range",
+      sql`${table.ratingHalfSteps} is null or (${table.ratingHalfSteps} between 2 and 10)`
+    ),
     profileConsumedAtIdx: index("cup_things_profile_consumed_at_idx").on(table.profileId, table.consumedAt),
     profileCategoryIdx: index("cup_things_profile_category_idx").on(table.profileId, table.category)
   })

@@ -57,9 +57,16 @@ export function App() {
   const [view, setView] = useState<View>({ name: "home" });
 
   useEffect(() => {
+    function handleAuthRequired() {
+      setProfile(null);
+      setView({ name: "home" });
+    }
+
+    window.addEventListener("cupthings:auth-required", handleAuthRequired);
+
     if (!getToken()) {
       setCheckingProfile(false);
-      return;
+      return () => window.removeEventListener("cupthings:auth-required", handleAuthRequired);
     }
 
     getMe()
@@ -69,6 +76,8 @@ export function App() {
         setProfile(null);
       })
       .finally(() => setCheckingProfile(false));
+
+    return () => window.removeEventListener("cupthings:auth-required", handleAuthRequired);
   }, []);
 
   if (checkingProfile) {
@@ -177,12 +186,26 @@ function HomeView({ onNavigate }: { onNavigate: (view: View) => void }) {
   }), [filters]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
     setLoading(true);
     setError("");
-    listCupThings(query)
-      .then(({ cupThings }) => setRecords(cupThings))
-      .catch((error) => setError(error instanceof Error ? error.message : "Could not load records"))
-      .finally(() => setLoading(false));
+    listCupThings(query, { signal: controller.signal })
+      .then(({ cupThings }) => {
+        if (active) setRecords(cupThings);
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setError(error instanceof Error ? error.message : "Could not load records");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [query]);
 
   return (
@@ -244,21 +267,30 @@ function RecordList({ records, onOpen }: { records: CupThing[]; onOpen: (id: str
 
 function DetailView({ id, onNavigate }: { id: string; onNavigate: (view: View) => void }) {
   const [record, setRecord] = useState<CupThing | null>(null);
-  const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     getCupThing(id)
       .then(({ cupThing }) => setRecord(cupThing))
-      .catch((error) => setError(error instanceof Error ? error.message : "Could not load record"));
+      .catch((error) => setLoadError(error instanceof Error ? error.message : "Could not load record"));
   }, [id]);
 
   async function remove() {
     if (!record || !window.confirm(`Delete "${record.name}"?`)) return;
-    await deleteCupThing(record.id);
-    onNavigate({ name: "home" });
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await deleteCupThing(record.id);
+      onNavigate({ name: "home" });
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Could not delete record");
+      setDeleting(false);
+    }
   }
 
-  if (error) return <p className="error">{error}</p>;
+  if (loadError) return <p className="error">{loadError}</p>;
   if (!record) return <p className="muted">Loading record...</p>;
 
   return (
@@ -272,9 +304,10 @@ function DetailView({ id, onNavigate }: { id: string; onNavigate: (view: View) =
         </div>
         <div className="buttonCluster">
           <button className="iconButton" aria-label="Edit" onClick={() => onNavigate({ name: "edit", id: record.id })}><Edit3 size={18} /></button>
-          <button className="iconButton danger" aria-label="Delete" onClick={remove}><Trash2 size={18} /></button>
+          <button className="iconButton danger" aria-label="Delete" onClick={remove} disabled={deleting}><Trash2 size={18} /></button>
         </div>
       </div>
+      {deleteError && <p className="error">{deleteError}</p>}
       <dl className="detailsGrid">
         <DetailItem label="Rating" value={record.rating ? record.rating.toFixed(1) : "Not rated"} />
         <DetailItem label="Location" value={record.location ?? "Not set"} />

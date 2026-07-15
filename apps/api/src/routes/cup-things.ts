@@ -3,7 +3,8 @@ import { and, desc, eq, gte, lte } from "drizzle-orm";
 import {
   createCupThingSchema,
   cupThingListQuerySchema,
-  updateCupThingSchema
+  updateCupThingSchema,
+  uuidParamSchema
 } from "@cupthings/shared";
 import { requireProfile } from "../auth.js";
 import { db } from "../db/client.js";
@@ -66,7 +67,7 @@ export async function registerCupThingRoutes(app: FastifyInstance) {
 
   app.get("/cup-things/:id", async (request, reply) => {
     try {
-      const { id } = request.params as { id: string };
+      const { id } = parseInput(uuidParamSchema, request.params);
       const row = await findCupThing(request.profile.id, id);
       return { cupThing: toCupThing(row) };
     } catch (error) {
@@ -76,7 +77,7 @@ export async function registerCupThingRoutes(app: FastifyInstance) {
 
   app.patch("/cup-things/:id", async (request, reply) => {
     try {
-      const { id } = request.params as { id: string };
+      const { id } = parseInput(uuidParamSchema, request.params);
       await findCupThing(request.profile.id, id);
       const input = parseInput(updateCupThingSchema, request.body);
       const [updated] = await db
@@ -107,7 +108,7 @@ export async function registerCupThingRoutes(app: FastifyInstance) {
 
   app.delete("/cup-things/:id", async (request, reply) => {
     try {
-      const { id } = request.params as { id: string };
+      const { id } = parseInput(uuidParamSchema, request.params);
       await findCupThing(request.profile.id, id);
       await db.delete(cupThings).where(and(eq(cupThings.id, id), eq(cupThings.profileId, request.profile.id)));
       return reply.status(204).send();

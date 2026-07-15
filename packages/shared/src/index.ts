@@ -27,6 +27,10 @@ export const isoDateTimeSchema = z
   .string()
   .datetime({ offset: true });
 
+export const uuidParamSchema = z.object({
+  id: z.string().uuid("Invalid id")
+});
+
 export const displayNameSchema = trimmedRequiredString.max(80);
 
 export const createProfileSchema = z.object({
@@ -76,6 +80,7 @@ export type CreateCupThingInput = z.infer<typeof createCupThingSchema>;
 export type UpdateCupThingInput = z.infer<typeof updateCupThingSchema>;
 export type CupThingListQuery = z.infer<typeof cupThingListQuerySchema>;
 export type ReviewQuery = z.infer<typeof reviewQuerySchema>;
+export type UuidParam = z.infer<typeof uuidParamSchema>;
 
 export type Profile = {
   id: string;
