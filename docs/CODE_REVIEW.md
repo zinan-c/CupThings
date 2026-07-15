@@ -39,7 +39,7 @@ Resolution:
 - Added a small API env loader used by both the runtime database client and Drizzle config.
 - Removed the implicit Drizzle database fallback; `DATABASE_URL` is now required.
 - Verified Drizzle migration and API database client loading from `apps/api/.env` without an exported `DATABASE_URL`.
-- Resolving commit: `ec9b91c`.
+- Resolving commit: `f9a57db`.
 
 ### CR-002 — A runtime 401 leaves stale authenticated UI state
 
@@ -60,7 +60,7 @@ Resolution:
 
 - Added a dedicated `AuthRequiredError` and centralized auth-required browser event.
 - `App` now clears in-memory profile state and returns to the welcome flow when any request receives 401.
-- Resolving commit: `ec9b91c`.
+- Resolving commit: `f9a57db`.
 
 ### CR-003 — Malformed CupThing IDs return 500
 
@@ -83,7 +83,7 @@ Resolution:
 - Added shared UUID param schema.
 - Detail, update, and delete routes now validate IDs before database queries.
 - Added API coverage for malformed UUID returning 400 and cross-profile valid UUID returning 404.
-- Resolving commit: `ec9b91c`.
+- Resolving commit: `f9a57db`.
 
 ### CR-004 — Fresh-clone type checking depends on generated shared output
 
@@ -106,7 +106,7 @@ Resolution:
 
 - Updated root `build`, `typecheck`, and `test` scripts to build shared output before dependent package checks.
 - Verified workspace `typecheck` from the root script.
-- Resolving commit: `ec9b91c`.
+- Resolving commit: `f9a57db`.
 
 ### CR-005 — `test` scripts do not run tests
 
@@ -136,7 +136,7 @@ Resolution:
 - Added Node test coverage for API profile creation, token hashing, missing/invalid tokens, profile isolation, CRUD, filtering, rating validation, Review stats, deletion, and malformed UUIDs.
 - Added frontend date helper tests for whole-day ranges and datetime-local conversion.
 - Updated package test scripts to run behavior tests.
-- Resolving commit: `ec9b91c`.
+- Resolving commit: `f9a57db`.
 
 ### CR-006 — Delete failures are not represented in the UI
 
@@ -153,7 +153,7 @@ Recommended resolution:
 Resolution:
 
 - Detail view now tracks deleting state, disables repeated delete clicks, catches delete failures, and renders the error while preserving the detail view.
-- Resolving commit: `ec9b91c`.
+- Resolving commit: `f9a57db`.
 
 ### CR-007 — Record filter requests can resolve out of order
 
@@ -170,7 +170,7 @@ Recommended resolution:
 Resolution:
 
 - List filtering now uses `AbortController` plus an active request guard so obsolete responses cannot overwrite current list state.
-- Resolving commit: `ec9b91c`.
+- Resolving commit: `f9a57db`.
 
 ### CR-008 — Database rating constraints rely only on the API
 
@@ -190,7 +190,7 @@ Resolution:
 
 - Added Drizzle schema check constraint and generated migration `0001_nappy_iron_fist.sql`.
 - Applied migration locally and verified PostgreSQL rejects `rating_half_steps = 11` while leaving no temporary data.
-- Resolving commit: `ec9b91c`.
+- Resolving commit: `f9a57db`.
 
 ## Deferred refinements
 
