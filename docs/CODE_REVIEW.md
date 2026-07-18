@@ -197,7 +197,7 @@ Resolution:
 
 ### CR-009 — Transient startup failures erase the anonymous recovery token
 
-- Status: Open
+- Status: In progress
 - Priority: P1
 - Affected files:
   - `apps/web/src/App.tsx`
@@ -216,7 +216,7 @@ Recommended resolution:
 
 ### CR-010 — The rating UI exposes an invalid 0.5 value
 
-- Status: Open
+- Status: In progress
 - Priority: P1
 - Affected files:
   - `apps/web/src/App.tsx`
@@ -233,7 +233,7 @@ Recommended resolution:
 
 ### CR-011 — Development host exposure conflicts with the single CORS origin
 
-- Status: Open
+- Status: In progress
 - Priority: P2
 - Affected files:
   - `apps/api/src/app.ts`
@@ -253,7 +253,7 @@ Recommended resolution:
 
 ### CR-012 — Browser storage failures can create inaccessible profiles
 
-- Status: Open
+- Status: In progress
 - Priority: P2
 - Affected files:
   - `apps/web/src/api.ts`
@@ -270,7 +270,7 @@ Recommended resolution:
 
 ### CR-013 — Review requests can resolve out of order
 
-- Status: Open
+- Status: In progress
 - Priority: P2
 - Affected files:
   - `apps/web/src/App.tsx`
@@ -286,7 +286,7 @@ Recommended resolution:
 
 ### CR-014 — API behavior tests use the normal database connection
 
-- Status: Open
+- Status: In progress
 - Priority: P2
 - Affected files:
   - `apps/api/src/api.test.ts`
@@ -305,7 +305,7 @@ Recommended resolution:
 
 ### CR-015 — Network errors are exposed as browser-specific raw messages
 
-- Status: Open
+- Status: In progress
 - Priority: P3
 - Affected files:
   - `apps/web/src/api.ts`
@@ -323,7 +323,7 @@ Recommended resolution:
 
 ### CR-016 — The health endpoint does not represent database readiness
 
-- Status: Open
+- Status: In progress
 - Priority: P3
 - Affected files:
   - `apps/api/src/app.ts`

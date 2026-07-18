@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { ArrowLeft, CalendarDays, Check, Edit3, Plus, Search, Star, Trash2 } from "lucide-react";
 import type {
@@ -9,7 +9,7 @@ import type {
   ReviewResponse
 } from "@cupthings/shared";
 import {
-  clearToken,
+  AuthRequiredError,
   createCupThing,
   createProfile,
   deleteCupThing,
@@ -17,11 +17,14 @@ import {
   getMe,
   getReview,
   getToken,
+  isStorageAvailable,
   listCupThings,
   setToken,
+  StorageUnavailableError,
   updateCupThing
 } from "./api";
 import { categoryLabels, categoryOptions } from "./constants";
+import { getStarSelectionValues } from "./rating";
 import {
   endOfLocalDayIso,
   formatDate,
@@ -54,34 +57,57 @@ const emptyFilters: Filters = {
 export function App() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [checkingProfile, setCheckingProfile] = useState(true);
+  const [profileError, setProfileError] = useState("");
+  const [profileCheckAttempt, setProfileCheckAttempt] = useState(0);
   const [view, setView] = useState<View>({ name: "home" });
 
   useEffect(() => {
     function handleAuthRequired() {
       setProfile(null);
+      setProfileError("");
       setView({ name: "home" });
     }
 
     window.addEventListener("cupthings:auth-required", handleAuthRequired);
 
-    if (!getToken()) {
+    try {
+      if (!getToken()) {
+        setCheckingProfile(false);
+        return () => window.removeEventListener("cupthings:auth-required", handleAuthRequired);
+      }
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : "Browser storage is unavailable");
       setCheckingProfile(false);
       return () => window.removeEventListener("cupthings:auth-required", handleAuthRequired);
     }
 
+    setProfileError("");
+    setCheckingProfile(true);
     getMe()
       .then(({ profile }) => setProfile(profile))
-      .catch(() => {
-        clearToken();
-        setProfile(null);
+      .catch((error) => {
+        if (error instanceof AuthRequiredError) return;
+        setProfileError(error instanceof Error ? error.message : "Could not load your profile");
       })
       .finally(() => setCheckingProfile(false));
 
     return () => window.removeEventListener("cupthings:auth-required", handleAuthRequired);
-  }, []);
+  }, [profileCheckAttempt]);
 
   if (checkingProfile) {
     return <Shell title="CupThings"><p className="muted">Loading your profile...</p></Shell>;
+  }
+
+  if (profileError) {
+    return (
+      <Shell title="CupThings">
+        <section className="emptyState">
+          <h2>Could not reach your profile</h2>
+          <p className="error">{profileError}</p>
+          <button className="primaryButton" onClick={() => setProfileCheckAttempt((attempt) => attempt + 1)}><Search size={17} /> Retry</button>
+        </section>
+      </Shell>
+    );
   }
 
   if (!profile) {
@@ -144,6 +170,10 @@ function Welcome({ onReady }: { onReady: (profile: Profile) => void }) {
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
+    if (!isStorageAvailable()) {
+      setError(new StorageUnavailableError().message);
+      return;
+    }
     setSaving(true);
     try {
       const result = await createProfile(displayName);
@@ -463,21 +493,31 @@ function ReviewView({ onOpen }: { onOpen: (id: string) => void }) {
   const [review, setReview] = useState<ReviewResponse | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const requestRef = useRef<{ controller: AbortController; id: number } | null>(null);
+  const requestIdRef = useRef(0);
 
   async function loadReview() {
+    requestRef.current?.controller.abort();
+    const controller = new AbortController();
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    requestRef.current = { controller, id: requestId };
     setLoading(true);
     setError("");
     try {
-      setReview(await getReview(startOfLocalDayIso(from), endOfLocalDayIso(to), category || undefined));
+      const result = await getReview(startOfLocalDayIso(from), endOfLocalDayIso(to), category || undefined, { signal: controller.signal });
+      if (requestRef.current?.id === requestId) setReview(result);
     } catch (error) {
+      if (controller.signal.aborted) return;
       setError(error instanceof Error ? error.message : "Could not load review");
     } finally {
-      setLoading(false);
+      if (requestRef.current?.id === requestId) setLoading(false);
     }
   }
 
   useEffect(() => {
     void loadReview();
+    return () => requestRef.current?.controller.abort();
   }, []);
 
   return (
@@ -492,7 +532,7 @@ function ReviewView({ onOpen }: { onOpen: (id: string) => void }) {
         </label>
         <label>From<input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
         <label>To<input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label>
-        <button className="primaryButton" onClick={loadReview}><CalendarDays size={18} /> Review</button>
+        <button className="primaryButton" onClick={loadReview} disabled={loading}><CalendarDays size={18} /> Review</button>
       </div>
       {error && <p className="error">{error}</p>}
       {loading && <p className="muted">Loading review...</p>}
@@ -525,7 +565,7 @@ function StarRatingInput({ value, onChange }: { value?: number; onChange: (ratin
               <Star size={25} />
             </span>
           </span>
-          {[rating - 0.5, rating].map((nextRating) => (
+          {getStarSelectionValues(rating).map((nextRating) => (
             <button
               type="button"
               key={nextRating}

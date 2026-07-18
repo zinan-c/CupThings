@@ -7,19 +7,24 @@ import type {
   UpdateCupThingInput
 } from "@cupthings/shared";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
+const API_URL = import.meta.env.VITE_API_URL ?? "/api";
 const TOKEN_KEY = "cupthings.token";
+const STORAGE_MESSAGE = "Browser storage is unavailable. Enable site storage to keep your CupThings profile.";
 
 export function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
+  return storage().getItem(TOKEN_KEY);
 }
 
 export function setToken(token: string) {
-  localStorage.setItem(TOKEN_KEY, token);
+  storage().setItem(TOKEN_KEY, token);
 }
 
 export function clearToken() {
-  localStorage.removeItem(TOKEN_KEY);
+  try {
+    storage().removeItem(TOKEN_KEY);
+  } catch (error) {
+    if (!(error instanceof StorageUnavailableError)) throw error;
+  }
 }
 
 type RequestOptions = {
@@ -36,6 +41,41 @@ export class AuthRequiredError extends Error {
   }
 }
 
+export class StorageUnavailableError extends Error {
+  constructor() {
+    super(STORAGE_MESSAGE);
+    this.name = "StorageUnavailableError";
+  }
+}
+
+export class NetworkError extends Error {
+  constructor() {
+    super("CupThings is temporarily unavailable. Check your connection and try again.");
+    this.name = "NetworkError";
+  }
+}
+
+function storage(): Storage {
+  try {
+    if (!window.localStorage) throw new Error("localStorage unavailable");
+    return window.localStorage;
+  } catch {
+    throw new StorageUnavailableError();
+  }
+}
+
+export function isStorageAvailable() {
+  try {
+    const store = storage();
+    const probeKey = `${TOKEN_KEY}.probe`;
+    store.setItem(probeKey, "1");
+    store.removeItem(probeKey);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers();
   const token = getToken();
@@ -48,12 +88,26 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
-    method: options.method ?? "GET",
-    headers,
-    body: options.body == null ? undefined : JSON.stringify(options.body),
-    signal: options.signal
-  });
+  const timeoutController = new AbortController();
+  const timeout = window.setTimeout(() => timeoutController.abort(), 10_000);
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, timeoutController.signal])
+    : timeoutController.signal;
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      method: options.method ?? "GET",
+      headers,
+      body: options.body == null ? undefined : JSON.stringify(options.body),
+      signal,
+      cache: "no-store"
+    });
+  } catch (error) {
+    if (options.signal?.aborted) throw error;
+    throw new NetworkError();
+  } finally {
+    window.clearTimeout(timeout);
+  }
 
   if (response.status === 401) {
     clearToken();
@@ -124,8 +178,8 @@ export async function deleteCupThing(id: string) {
   });
 }
 
-export async function getReview(from: string, to: string, category?: CupThingCategory) {
+export async function getReview(from: string, to: string, category?: CupThingCategory, options: { signal?: AbortSignal } = {}) {
   const params = new URLSearchParams({ from, to });
   if (category) params.set("category", category);
-  return request<ReviewResponse>(`/reviews?${params.toString()}`);
+  return request<ReviewResponse>(`/reviews?${params.toString()}`, { signal: options.signal });
 }

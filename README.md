@@ -27,20 +27,23 @@ CupThings is a lightweight Web app for logging personal drink and food experienc
 1. Install dependencies with `pnpm install`.
 2. Create a local database, for example `createdb cupthings`.
 3. Copy `apps/api/.env.example` to `apps/api/.env` and set `DATABASE_URL`.
-4. Copy `apps/web/.env.example` to `apps/web/.env` if the API URL differs from `http://localhost:4000`.
+4. Copy `apps/web/.env.example` to `apps/web/.env` only when the API is not reachable through the local Vite proxy.
 5. Run database migrations with `pnpm --filter @cupthings/api db:migrate`.
 6. Start both apps with `pnpm dev`.
 
-The Web app defaults to `http://localhost:5173`; the API defaults to `http://localhost:4000`.
+The Web app defaults to `http://localhost:5173` and proxies `/api` to the API at `http://localhost:4000`. The Vite server listens on all interfaces, so another device can use the host machine's LAN address without a browser CORS request. For a direct API URL, set `VITE_API_URL` and include the Web origin in `WEB_ORIGINS`.
 
 ## Environment Variables
 
 - `DATABASE_URL`: consumed by the API runtime and Drizzle migrations.
 - `PORT`: optional API port, default `4000`.
-- `WEB_ORIGIN`: optional CORS origin, default `http://localhost:5173`.
-- `VITE_API_URL`: optional frontend API base URL, default `http://localhost:4000`.
+- `WEB_ORIGINS`: optional comma-separated CORS origins for direct API access. Defaults to localhost and 127.0.0.1 Web origins. `WEB_ORIGIN` remains supported for a single origin.
+- `VITE_API_URL`: optional frontend API base URL, default `/api` (the Vite development proxy).
+- `TEST_DATABASE_URL`: required for API tests when `NODE_ENV=test`; it must point to a database whose name ends in `_test`.
 
 The API and Drizzle config load `apps/api/.env` automatically when commands are run from `apps/api` or through the provided pnpm scripts.
+
+For API tests, create a separate test database and copy `apps/api/.env.example` to `apps/api/.env.test`, keeping only a `TEST_DATABASE_URL` that ends in `_test`. Tests refuse to use the normal runtime database.
 
 ## Identity and Recovery
 
@@ -71,6 +74,12 @@ Categories are fixed to `coffee`, `wine`, `dessert`, and `other`. `name`, `categ
 - `pnpm test`: run behavior tests.
 - `pnpm --filter @cupthings/api db:generate`: generate Drizzle migrations.
 - `pnpm --filter @cupthings/api db:migrate`: apply Drizzle migrations.
+
+`GET /health` reports process liveness. `GET /ready` checks PostgreSQL readiness and returns `503` when the database is unavailable.
+
+## Troubleshooting
+
+If the browser shows a network error, first check that the API is running on port `4000` and that `/ready` returns success. When using a direct `VITE_API_URL`, make sure the URL points to the development machine rather than `localhost` on another device, and add the Web origin to `WEB_ORIGINS`. Site storage must be enabled because it holds the anonymous profile token.
 
 ## Current Limitations
 

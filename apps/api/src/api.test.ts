@@ -46,6 +46,17 @@ test("missing and invalid tokens are rejected", async () => {
   assert.equal(invalid.statusCode, 401);
 });
 
+test("health and readiness expose process and database state", async () => {
+  const health = await app.inject({ method: "GET", url: "/health" });
+  assert.equal(health.statusCode, 200);
+  assert.deepEqual(health.json(), { ok: true });
+  assert.equal(health.headers["cache-control"], "no-store");
+
+  const ready = await app.inject({ method: "GET", url: "/ready" });
+  assert.equal(ready.statusCode, 200);
+  assert.deepEqual(ready.json(), { ok: true });
+});
+
 test("CupThing CRUD, filtering, review stats, profile isolation, and malformed UUID handling", async () => {
   const first = await createProfile("Test Profile One");
   const second = await createProfile("Test Profile Two");
