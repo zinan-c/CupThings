@@ -1,7 +1,7 @@
 # CupThings Code Review
 
 Last reviewed: 2026-07-18
-Latest reviewed revision: `1bc2478` (`feat: support half-star ratings`)
+Latest reviewed revision: `18be3f2` (`fix: address latest code review findings`)
 Initial reviewed revision: `a4c042d` (`feat: implement CupThings MVP`)
 
 This document records review findings that should remain visible across agent sessions. It is a tracked project document, unlike the local `WORK_LOG.md`.
@@ -193,11 +193,11 @@ Resolution:
 - Applied migration locally and verified PostgreSQL rejects `rating_half_steps = 11` while leaving no temporary data.
 - Resolving commit: `f9a57db`.
 
-## Review 2026-07-18 — Open findings
+## Review 2026-07-18 — Resolved findings
 
 ### CR-009 — Transient startup failures erase the anonymous recovery token
 
-- Status: In progress
+- Status: Resolved
 - Priority: P1
 - Affected files:
   - `apps/web/src/App.tsx`
@@ -214,9 +214,14 @@ Recommended resolution:
 3. Add a distinct startup error state with Retry rather than returning to onboarding.
 4. Add tests proving that network and 500 failures do not clear the token.
 
+Resolution:
+
+- Startup now distinguishes confirmed 401 responses from network/server failures, preserves the token for recoverable failures, and renders a Retry state.
+- Resolving commit: `18be3f2`.
+
 ### CR-010 — The rating UI exposes an invalid 0.5 value
 
-- Status: In progress
+- Status: Resolved
 - Priority: P1
 - Affected files:
   - `apps/web/src/App.tsx`
@@ -231,9 +236,14 @@ Recommended resolution:
 - If 0.5 is intended to be valid, update the shared schema, database constraint, README, and tests together.
 - Add a UI-level test covering every selectable rating value.
 
+Resolution:
+
+- The first star exposes only 1.0; later stars expose half and whole values. The selectable value helper is covered by Web tests.
+- Resolving commit: `18be3f2`.
+
 ### CR-011 — Development host exposure conflicts with the single CORS origin
 
-- Status: In progress
+- Status: Resolved
 - Priority: P2
 - Affected files:
   - `apps/api/src/app.ts`
@@ -251,9 +261,14 @@ Recommended resolution:
 - Support an explicit development origin allowlist and document LAN API configuration.
 - Add a browser-level check for localhost, 127.0.0.1, and the intended LAN workflow.
 
+Resolution:
+
+- Vite now proxies same-origin `/api` requests and listens on all interfaces. API CORS accepts a comma-separated `WEB_ORIGINS` allowlist, with localhost and 127.0.0.1 defaults documented for direct access.
+- Resolving commit: `18be3f2`.
+
 ### CR-012 — Browser storage failures can create inaccessible profiles
 
-- Status: In progress
+- Status: Resolved
 - Priority: P2
 - Affected files:
   - `apps/web/src/api.ts`
@@ -268,9 +283,14 @@ Recommended resolution:
 3. Show a clear browser-storage requirement when persistence is unavailable.
 4. Never use `localStorage.clear()`; remove only namespaced CupThings keys when necessary.
 
+Resolution:
+
+- Added a guarded namespaced storage adapter and availability probe before profile creation. Storage failures are shown as an actionable onboarding error, and only the CupThings token key is removed.
+- Resolving commit: `18be3f2`.
+
 ### CR-013 — Review requests can resolve out of order
 
-- Status: In progress
+- Status: Resolved
 - Priority: P2
 - Affected files:
   - `apps/web/src/App.tsx`
@@ -284,9 +304,14 @@ Recommended resolution:
 - Disable repeated submission while a request is pending, or explicitly replace the current request.
 - Associate displayed results with the filters that produced them.
 
+Resolution:
+
+- Review requests now abort the previous request, ignore stale responses, and disable duplicate submission while loading.
+- Resolving commit: `18be3f2`.
+
 ### CR-014 — API behavior tests use the normal database connection
 
-- Status: In progress
+- Status: Resolved
 - Priority: P2
 - Affected files:
   - `apps/api/src/api.test.ts`
@@ -303,9 +328,14 @@ Recommended resolution:
 - Prefer transaction rollback or a dedicated temporary schema.
 - Document test database setup.
 
+Resolution:
+
+- API tests require `TEST_DATABASE_URL`, load `.env.test`, and refuse databases whose names do not end in `_test`. README and env examples document the separate test database.
+- Resolving commit: `18be3f2`.
+
 ### CR-015 — Network errors are exposed as browser-specific raw messages
 
-- Status: In progress
+- Status: Resolved
 - Priority: P3
 - Affected files:
   - `apps/web/src/api.ts`
@@ -321,9 +351,14 @@ Recommended resolution:
 - Set `cache: "no-store"` for private API requests and return an appropriate `Cache-Control` header from the API.
 - Offer manual retry for safe reads; do not blindly retry non-idempotent creates.
 
+Resolution:
+
+- Fetch now uses a bounded timeout, translates transport failures to a stable NetworkError, opts out of caching, and exposes retry for startup reads. Creates are not automatically retried.
+- Resolving commit: `18be3f2`.
+
 ### CR-016 — The health endpoint does not represent database readiness
 
-- Status: In progress
+- Status: Resolved
 - Priority: P3
 - Affected files:
   - `apps/api/src/app.ts`
@@ -336,6 +371,11 @@ Recommended resolution:
 - Keep `/health` as a lightweight process liveness endpoint.
 - Add `/ready` that performs a small database check such as `select 1`.
 - Use readiness rather than liveness for deployment traffic routing.
+
+Resolution:
+
+- Added `/ready` with a `select 1` database check and `503` failure response. `/health` remains the lightweight liveness endpoint.
+- Resolving commit: `18be3f2`.
 
 ### Additional test gaps
 
@@ -377,12 +417,12 @@ These are reasonable MVP tradeoffs and do not need immediate changes:
 
 ## README improvements
 
-The setup, environment, API, identity, validation, command, and limitation sections requested by the initial review are now present. Remaining documentation work:
+The setup, environment, API, identity, validation, command, limitation, troubleshooting, test database, and readiness sections requested by the review are now present:
 
-1. Add a `Load failed` troubleshooting section that distinguishes API downtime, CORS, an incorrect `VITE_API_URL`, and unavailable browser storage.
-2. Document supported Node and pnpm versions, including how to enable or install pnpm.
-3. Document the separate test database setup proposed in CR-014.
-4. Document `/ready` after database readiness is implemented.
+1. `Load failed` troubleshooting distinguishes API downtime, CORS, an incorrect `VITE_API_URL`, and unavailable browser storage.
+2. Supported Node and pnpm versions are documented.
+3. The separate test database setup proposed in CR-014 is documented.
+4. `/ready` and its database readiness behavior are documented.
 
 ## Verification performed during review
 
