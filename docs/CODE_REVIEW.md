@@ -1,7 +1,8 @@
 # CupThings Code Review
 
-Last reviewed: 2026-07-15
-Reviewed revision: `a4c042d` (`feat: implement CupThings MVP`)
+Last reviewed: 2026-07-18
+Latest reviewed revision: `1bc2478` (`feat: support half-star ratings`)
+Initial reviewed revision: `a4c042d` (`feat: implement CupThings MVP`)
 
 This document records review findings that should remain visible across agent sessions. It is a tracked project document, unlike the local `WORK_LOG.md`.
 
@@ -12,7 +13,7 @@ This document records review findings that should remain visible across agent se
 - `Resolved`: implemented and verified; keep the entry with the resolving commit.
 - Priorities run from `P1` (address before a shared MVP deployment) to `P3` (refinement).
 
-## Open findings
+## Historical findings
 
 ### CR-001 — API `.env` files are not loaded automatically
 
@@ -192,6 +193,173 @@ Resolution:
 - Applied migration locally and verified PostgreSQL rejects `rating_half_steps = 11` while leaving no temporary data.
 - Resolving commit: `f9a57db`.
 
+## Review 2026-07-18 — Open findings
+
+### CR-009 — Transient startup failures erase the anonymous recovery token
+
+- Status: Open
+- Priority: P1
+- Affected files:
+  - `apps/web/src/App.tsx`
+  - `apps/web/src/api.ts`
+
+The startup `getMe()` call clears the stored token for every rejected request. This includes 401, but also temporary API downtime, CORS failures, database failures, offline state, browser `Load failed`, and 500 responses.
+
+The anonymous token is the user's only credential. Clearing it after a recoverable failure can permanently orphan all records associated with that profile.
+
+Recommended resolution:
+
+1. Clear the token only for `AuthRequiredError` or another confirmed 401 response.
+2. Preserve the token for network, CORS, timeout, and server errors.
+3. Add a distinct startup error state with Retry rather than returning to onboarding.
+4. Add tests proving that network and 500 failures do not clear the token.
+
+### CR-010 — The rating UI exposes an invalid 0.5 value
+
+- Status: Open
+- Priority: P1
+- Affected files:
+  - `apps/web/src/App.tsx`
+  - `packages/shared/src/index.ts`
+  - `apps/api/src/db/schema.ts`
+
+`StarRatingInput` generates `[rating - 0.5, rating]` for every star. The first star therefore exposes a 0.5 choice, while the shared schema and database only accept ratings from 1 through 5. Selecting the first star's left half creates UI state that cannot be saved and produces a 400 response.
+
+Recommended resolution:
+
+- Under the current product rule, expose only 1.0 for the first star and half/integer choices for later stars.
+- If 0.5 is intended to be valid, update the shared schema, database constraint, README, and tests together.
+- Add a UI-level test covering every selectable rating value.
+
+### CR-011 — Development host exposure conflicts with the single CORS origin
+
+- Status: Open
+- Priority: P2
+- Affected files:
+  - `apps/api/src/app.ts`
+  - `apps/web/package.json`
+  - `apps/web/src/api.ts`
+  - `README.md`
+
+Vite runs with `--host 0.0.0.0`, which exposes localhost, 127.0.0.1, and LAN URLs. The API allows only one exact `WEB_ORIGIN`, normally `http://localhost:5173`, while the frontend defaults to `http://localhost:4000`.
+
+Opening the app through 127.0.0.1 or a LAN address is therefore blocked by CORS. On another device, `localhost:4000` points to that device rather than the development machine. Browsers typically surface this as `Load failed` or `Failed to fetch`.
+
+Recommended resolution:
+
+- Prefer a same-origin Vite `/api` proxy for local development; or
+- Support an explicit development origin allowlist and document LAN API configuration.
+- Add a browser-level check for localhost, 127.0.0.1, and the intended LAN workflow.
+
+### CR-012 — Browser storage failures can create inaccessible profiles
+
+- Status: Open
+- Priority: P2
+- Affected files:
+  - `apps/web/src/api.ts`
+  - `apps/web/src/App.tsx`
+
+The frontend accesses `localStorage` without error handling. During onboarding, the profile is created before the returned token is stored. If storage is unavailable due to privacy settings, browser policy, or a storage exception, the profile exists but its token is lost; retrying creates another orphan profile.
+
+Recommended resolution:
+
+1. Wrap application storage access in a small adapter.
+2. Verify storage availability before `POST /profiles`.
+3. Show a clear browser-storage requirement when persistence is unavailable.
+4. Never use `localStorage.clear()`; remove only namespaced CupThings keys when necessary.
+
+### CR-013 — Review requests can resolve out of order
+
+- Status: Open
+- Priority: P2
+- Affected files:
+  - `apps/web/src/App.tsx`
+  - `apps/web/src/api.ts`
+
+Home list filtering cancels obsolete requests, but Review does not. Repeated Review clicks can leave multiple requests in flight; a slower response for an older category or date range can overwrite the newest result.
+
+Recommended resolution:
+
+- Apply the existing `AbortController` and active-request pattern to Review.
+- Disable repeated submission while a request is pending, or explicitly replace the current request.
+- Associate displayed results with the filters that produced them.
+
+### CR-014 — API behavior tests use the normal database connection
+
+- Status: Open
+- Priority: P2
+- Affected files:
+  - `apps/api/src/api.test.ts`
+  - `apps/api/src/db/client.ts`
+  - `apps/api/.env.example`
+  - `README.md`
+
+API tests use the same `DATABASE_URL` as the development or deployed runtime. The tests currently clean up their generated profiles, but a misconfigured environment could run data-writing tests against a production database. An interrupted test can also leave temporary rows behind.
+
+Recommended resolution:
+
+- Require a separate `TEST_DATABASE_URL` for API tests.
+- Refuse to start tests unless the database or schema is explicitly marked as test-only.
+- Prefer transaction rollback or a dedicated temporary schema.
+- Document test database setup.
+
+### CR-015 — Network errors are exposed as browser-specific raw messages
+
+- Status: Open
+- Priority: P3
+- Affected files:
+  - `apps/web/src/api.ts`
+  - `apps/web/src/App.tsx`
+  - `apps/api/src/app.ts`
+
+The fetch wrapper does not translate network failures, enforce a timeout, or explicitly opt API requests out of caching. Users see browser-specific messages such as `Load failed` or `Failed to fetch`, which do not distinguish API downtime, CORS, offline state, or timeout.
+
+Recommended resolution:
+
+- Add a dedicated `NetworkError` with an actionable user-facing message.
+- Add a bounded timeout with `AbortController`.
+- Set `cache: "no-store"` for private API requests and return an appropriate `Cache-Control` header from the API.
+- Offer manual retry for safe reads; do not blindly retry non-idempotent creates.
+
+### CR-016 — The health endpoint does not represent database readiness
+
+- Status: Open
+- Priority: P3
+- Affected files:
+  - `apps/api/src/app.ts`
+  - `apps/api/src/db/client.ts`
+
+`GET /health` always returns `{ ok: true }` even if PostgreSQL is unreachable. A deployment can therefore appear healthy while all useful endpoints fail.
+
+Recommended resolution:
+
+- Keep `/health` as a lightweight process liveness endpoint.
+- Add `/ready` that performs a small database check such as `select 1`.
+- Use readiness rather than liveness for deployment traffic routing.
+
+### Additional test gaps
+
+The current automated checks do not cover:
+
+- The rating control's complete selectable value set.
+- Startup network and server failures preserving the anonymous token.
+- Browser storage exceptions.
+- CORS behavior across localhost, 127.0.0.1, and LAN access.
+- Review request cancellation and response ordering.
+- End-to-end onboarding, record editing, and Review interactions.
+- Daylight-saving-time boundaries for local date helpers.
+
+The datetime-local round-trip test should compare the final ISO instant with the original input instant. Its current assertion mostly compares two values derived from the same intermediate local string, so it does not strongly validate the complete round trip.
+
+### Verification for the 2026-07-18 review
+
+- Git worktree was clean and `main` matched `origin/main` at `1bc2478`.
+- Shared, API, and Web TypeScript checks passed.
+- API behavior tests passed: 3 tests.
+- Web date helper tests passed: 2 tests.
+- Shared, API, and Web production builds passed.
+- Test execution did not change the existing database row counts.
+
 ## Deferred refinements
 
 These are reasonable MVP tradeoffs and do not need immediate changes:
@@ -199,20 +367,22 @@ These are reasonable MVP tradeoffs and do not need immediate changes:
 - Navigation is held in React state, so refresh and browser Back do not preserve detail/edit views. Adopt URL routing when that behavior becomes important.
 - Review statistics load the selected records and aggregate them in Node. Move aggregation to SQL when record volume or pagination requires it.
 - Lists are not paginated. Add cursor pagination when real usage demonstrates the need.
+- Split the large `apps/web/src/App.tsx` into profile, records, form, Review, and rating feature modules.
+- Add reasonable maximum lengths for optional text fields and corresponding frontend `maxLength` hints.
+- Use one source for category constants shared by API schema and domain validation.
+- Add linting, formatting, and CI checks for typecheck, test, and build.
+- Add graceful API shutdown that closes Fastify and the PostgreSQL pool.
+- Add basic rate limiting before exposing profile creation publicly.
+- Configure production caching explicitly for `index.html`, hashed assets, and private API responses.
 
 ## README improvements
 
-The README should eventually include the following sections:
+The setup, environment, API, identity, validation, command, and limitation sections requested by the initial review are now present. Remaining documentation work:
 
-1. **Prerequisites** — supported Node version, pnpm version and installation method, and PostgreSQL requirements.
-2. **Quick start from a clean clone** — database creation, environment setup, migrations, and startup commands.
-3. **Environment variables** — `DATABASE_URL`, `PORT`, `WEB_ORIGIN`, and `VITE_API_URL`, including which process consumes each variable.
-4. **Anonymous identity and data recovery** — explain that the token is browser-bound and that clearing browser storage or changing devices loses access in the MVP.
-5. **API overview** — summarize `/profiles`, `/me`, `/cup-things`, and `/reviews` and the Bearer token requirement.
-6. **Data model and validation** — categories, field limits, rating rules, and date semantics.
-7. **Development commands** — dev, build, typecheck, test, migration generation, and migration execution.
-8. **Current limitations** — no formal login, cross-device recovery, pagination, images, maps, social features, or AI narration.
-9. **Project status** — distinguish implemented functionality, verified functionality, and planned work.
+1. Add a `Load failed` troubleshooting section that distinguishes API downtime, CORS, an incorrect `VITE_API_URL`, and unavailable browser storage.
+2. Document supported Node and pnpm versions, including how to enable or install pnpm.
+3. Document the separate test database setup proposed in CR-014.
+4. Document `/ready` after database readiness is implemented.
 
 ## Verification performed during review
 
