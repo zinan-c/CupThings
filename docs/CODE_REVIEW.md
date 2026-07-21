@@ -4,6 +4,15 @@ Last reviewed: 2026-07-18
 Latest reviewed revision: `18be3f2` (`fix: address latest code review findings`)
 Initial reviewed revision: `a4c042d` (`feat: implement CupThings MVP`)
 
+## Refactor follow-up 2026-07-21
+
+- `d2cd813` separates authentication and Review transactions from route handlers, extracts the Web HTTP client, rating, records, and feedback modules, and centralizes API test helpers.
+- `47685b7` adds Magic Link expiry/replay, refresh replay, and anonymous account merge coverage.
+- `86eb8e8` adds idempotent API shutdown for SIGTERM and SIGINT.
+- `a529b5f` adds Web API client coverage for Bearer/Cookie requests, refresh retry, storage failures, and auth invalidation.
+
+Remaining test gaps are component-level browser interaction tests and Playwright end-to-end coverage for the full MVP workflow.
+
 This document records review findings that should remain visible across agent sessions. It is a tracked project document, unlike the local `WORK_LOG.md`.
 
 ## Status conventions

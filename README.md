@@ -16,6 +16,8 @@ CupThings is a lightweight Web app for logging personal drink and food experienc
 - `apps/api`: Node.js, TypeScript, Fastify REST API.
 - `packages/shared`: Zod schemas and shared TypeScript types.
 
+The API keeps HTTP route handlers thin and places authentication and Review transactions in `apps/api/src/services`. The Web app keeps the HTTP/session client under `apps/web/src/api`, with feature components under `apps/web/src/features` and shared feedback components under `apps/web/src/shared`.
+
 ## Prerequisites
 
 - Node.js 22 or newer.
