@@ -5,6 +5,7 @@ import { buildApp } from "./app.js";
 import { db, pool } from "./db/client.js";
 import { accounts, profiles, sessions } from "./db/schema.js";
 import { getLastConsoleLoginLink } from "./email.js";
+import { auth, cookieHeader, createTestProfile } from "./test-helpers.js";
 
 const app = await buildApp();
 const createdProfileIds: string[] = [];
@@ -56,7 +57,7 @@ test("missing and invalid tokens are rejected", async () => {
 });
 
 test("Magic Link claims an anonymous profile, rotates sessions, and logs out", async () => {
-  const anonymous = await createProfile("Magic Link Anonymous");
+  const anonymous = await createTestProfile(app, createdProfileIds, "Magic Link Anonymous");
   const requestLink = await app.inject({
     method: "POST",
     url: "/auth/request-link",
@@ -104,7 +105,7 @@ test("Magic Link claims an anonymous profile, rotates sessions, and logs out", a
 });
 
 test("account deletion removes the profile, records, and account", async () => {
-  const anonymous = await createProfile("Delete Me");
+  const anonymous = await createTestProfile(app, createdProfileIds, "Delete Me");
   const requestLink = await app.inject({
     method: "POST",
     url: "/auth/request-link",
@@ -157,8 +158,8 @@ test("profile creation rejects oversized request bodies", async () => {
 });
 
 test("CupThing CRUD, filtering, review stats, profile isolation, and malformed UUID handling", async () => {
-  const first = await createProfile("Test Profile One");
-  const second = await createProfile("Test Profile Two");
+  const first = await createTestProfile(app, createdProfileIds, "Test Profile One");
+  const second = await createTestProfile(app, createdProfileIds, "Test Profile Two");
 
   const now = new Date();
   const consumedAt = now.toISOString();
@@ -292,26 +293,3 @@ test("profile creation is rate limited per app instance", async () => {
     await limitedApp.close();
   }
 });
-
-async function createProfile(displayName: string) {
-  const response = await app.inject({
-    method: "POST",
-    url: "/profiles",
-    headers: { "x-forwarded-for": `10.0.0.${createdProfileIds.length + 1}` },
-    payload: { displayName }
-  });
-  assert.equal(response.statusCode, 201);
-  const body = response.json();
-  createdProfileIds.push(body.profile.id);
-  return { profile: body.profile, token: body.token as string };
-}
-
-function auth(token: string) {
-  return { authorization: `Bearer ${token}` };
-}
-
-function cookieHeader(value: string | string[] | undefined) {
-  assert.ok(value);
-  const values = Array.isArray(value) ? value : [value];
-  return values.map((cookie) => cookie.split(";", 1)[0]).join("; ");
-}

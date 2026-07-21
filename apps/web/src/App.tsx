@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { ArrowLeft, CalendarDays, Check, Edit3, LogOut, Mail, Plus, Search, Star, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarDays, Check, Edit3, LogOut, Mail, Plus, Search, Trash2 } from "lucide-react";
 import type {
   CreateCupThingInput,
   CupThing,
@@ -28,7 +28,9 @@ import {
   verifyLogin
 } from "./api";
 import { categoryLabels, categoryOptions } from "./constants";
-import { getStarSelectionValues } from "./rating";
+import { RatingDisplay, StarRatingInput } from "./features/rating";
+import { RecordList } from "./features/records/RecordList";
+import { EmptyState, StatCard } from "./shared/Feedback";
 import {
   endOfLocalDayIso,
   formatDate,
@@ -364,25 +366,6 @@ function FiltersBar({ filters, onChange }: { filters: Filters; onChange: (filter
   );
 }
 
-function RecordList({ records, onOpen }: { records: CupThing[]; onOpen: (id: string) => void }) {
-  return (
-    <div className="recordList">
-      {records.map((record) => (
-        <button className="recordRow" key={record.id} onClick={() => onOpen(record.id)}>
-          <span>
-            <strong>{record.name}</strong>
-            <small>{formatDateTime(record.consumedAt)}</small>
-          </span>
-          <span className="rowMeta">
-            <span className={`pill ${record.category}`}>{categoryLabels[record.category]}</span>
-            {record.rating && <RatingDisplay rating={record.rating} compact />}
-          </span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function DetailView({ id, onNavigate }: { id: string; onNavigate: (view: View) => void }) {
   const [record, setRecord] = useState<CupThing | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -632,76 +615,6 @@ function ReviewView({ onOpen }: { onOpen: (id: string) => void }) {
           )}
         </>
       )}
-    </section>
-  );
-}
-
-function StarRatingInput({ value, onChange }: { value?: number; onChange: (rating: number | undefined) => void }) {
-  return (
-    <div className="starRating" role="radiogroup" aria-label="Rating">
-      {[1, 2, 3, 4, 5].map((rating) => (
-        <span className="starChoice" key={rating}>
-          <span className="starChoiceIcon">
-            <Star size={25} />
-            <span className="starChoiceFill" style={{ width: `${getStarFillPercent(value, rating)}%` }}>
-              <Star size={25} />
-            </span>
-          </span>
-          {getStarSelectionValues(rating).map((nextRating) => (
-            <button
-              type="button"
-              key={nextRating}
-              className={nextRating % 1 === 0 ? "starHitArea right" : "starHitArea left"}
-              aria-label={`${nextRating.toFixed(1)} star${nextRating === 1 ? "" : "s"}`}
-              aria-checked={value === nextRating}
-              role="radio"
-              onClick={() => onChange(value === nextRating ? undefined : nextRating)}
-            />
-          ))}
-        </span>
-      ))}
-      {value && <button type="button" className="clearRatingButton" onClick={() => onChange(undefined)}>Clear</button>}
-    </div>
-  );
-}
-
-function RatingDisplay({ rating, compact = false }: { rating: number; compact?: boolean }) {
-  return (
-    <span className={compact ? "ratingDisplay compact" : "ratingDisplay"} aria-label={`${rating.toFixed(1)} out of 5`}>
-      {[1, 2, 3, 4, 5].map((star) => (
-        <span className="displayStar" key={star}>
-          <Star size={compact ? 14 : 17} />
-          <span className="displayStarFill" style={{ width: `${getStarFillPercent(rating, star)}%` }}>
-            <Star size={compact ? 14 : 17} />
-          </span>
-        </span>
-      ))}
-      {!compact && <span>{rating.toFixed(1)}</span>}
-    </span>
-  );
-}
-
-function getStarFillPercent(value: number | undefined, star: number) {
-  if (!value || value <= star - 1) return 0;
-  if (value >= star) return 100;
-  return 50;
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="statCard">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function EmptyState({ title, body, actionLabel, onAction }: { title: string; body: string; actionLabel?: string; onAction?: () => void }) {
-  return (
-    <section className="emptyState">
-      <h2>{title}</h2>
-      <p>{body}</p>
-      {actionLabel && onAction && <button className="primaryButton" onClick={onAction}><Plus size={18} /> {actionLabel}</button>}
     </section>
   );
 }
