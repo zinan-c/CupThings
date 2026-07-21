@@ -3,7 +3,7 @@ import { after, test } from "node:test";
 import { eq } from "drizzle-orm";
 import { buildApp } from "./app.js";
 import { db, pool } from "./db/client.js";
-import { accounts, profiles, sessions } from "./db/schema.js";
+import { accounts, cupThings, loginChallenges, profiles, sessions } from "./db/schema.js";
 import { getLastConsoleLoginLink } from "./email.js";
 import { auth, cookieHeader, createTestProfile } from "./test-helpers.js";
 
@@ -134,6 +134,68 @@ test("account deletion removes the profile, records, and account", async () => {
   assert.equal(deletedProfile, undefined);
   const [deletedAccount] = await db.select().from(accounts).where(eq(accounts.id, profile.accountId));
   assert.equal(deletedAccount, undefined);
+});
+
+test("refresh rotation rejects replayed refresh tokens", async () => {
+  const anonymous = await createTestProfile(app, createdProfileIds, "Refresh Replay");
+  const rotated = await app.inject({
+    method: "POST",
+    url: "/auth/refresh",
+    payload: { refreshToken: anonymous.refreshToken }
+  });
+  assert.equal(rotated.statusCode, 200);
+  assert.notEqual(rotated.json().refreshToken, anonymous.refreshToken);
+  const replay = await app.inject({ method: "POST", url: "/auth/refresh", payload: { refreshToken: anonymous.refreshToken } });
+  assert.equal(replay.statusCode, 401);
+});
+
+test("anonymous records merge into an existing email account", async () => {
+  const email = `merge-${Date.now()}@example.com`;
+  const owner = await createTestProfile(app, createdProfileIds, "Merge Owner");
+  const source = await createTestProfile(app, createdProfileIds, "Merge Source");
+
+  const ownerLinkResponse = await app.inject({ method: "POST", url: "/auth/request-link", headers: auth(owner.token), payload: { email } });
+  assert.equal(ownerLinkResponse.statusCode, 202);
+  const ownerToken = new URL(getLastConsoleLoginLink()!).searchParams.get("token");
+  assert.ok(ownerToken);
+  const ownerVerified = await app.inject({ method: "POST", url: "/auth/verify", payload: { token: ownerToken } });
+  assert.equal(ownerVerified.statusCode, 200);
+  const [ownerRow] = await db.select().from(profiles).where(eq(profiles.id, owner.profile.id));
+  assert.ok(ownerRow?.accountId);
+  createdAccountIds.push(ownerRow.accountId);
+
+  const record = await app.inject({
+    method: "POST",
+    url: "/cup-things",
+    headers: auth(source.token),
+    payload: { name: "Merged Record", category: "coffee", consumedAt: new Date().toISOString(), flavors: [] }
+  });
+  assert.equal(record.statusCode, 201);
+
+  const sourceLinkResponse = await app.inject({ method: "POST", url: "/auth/request-link", headers: auth(source.token), payload: { email } });
+  assert.equal(sourceLinkResponse.statusCode, 202);
+  const sourceToken = new URL(getLastConsoleLoginLink()!).searchParams.get("token");
+  assert.ok(sourceToken);
+  const sourceVerified = await app.inject({ method: "POST", url: "/auth/verify", payload: { token: sourceToken } });
+  assert.equal(sourceVerified.statusCode, 200);
+  assert.equal(sourceVerified.json().profile.id, ownerVerified.json().profile.id);
+
+  const sourceRows = await db.select().from(cupThings).where(eq(cupThings.profileId, source.profile.id));
+  assert.equal(sourceRows.length, 0);
+  const ownerRows = await db.select().from(cupThings).where(eq(cupThings.profileId, owner.profile.id));
+  assert.equal(ownerRows.length, 1);
+});
+
+test("expired login challenges cannot be verified", async () => {
+  const anonymous = await createTestProfile(app, createdProfileIds, "Expired Challenge");
+  const email = `expired-${Date.now()}@example.com`;
+  const requested = await app.inject({ method: "POST", url: "/auth/request-link", headers: auth(anonymous.token), payload: { email } });
+  assert.equal(requested.statusCode, 202);
+  const token = new URL(getLastConsoleLoginLink()!).searchParams.get("token");
+  assert.ok(token);
+  await db.update(loginChallenges).set({ expiresAt: new Date(Date.now() - 1) }).where(eq(loginChallenges.email, email));
+  const response = await app.inject({ method: "POST", url: "/auth/verify", payload: { token } });
+  assert.equal(response.statusCode, 401);
 });
 
 test("health and readiness expose process and database state", async () => {

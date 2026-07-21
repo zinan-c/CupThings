@@ -11,7 +11,7 @@ export async function createTestProfile(app: FastifyInstance, createdProfileIds:
   assert.equal(response.statusCode, 201);
   const body = response.json();
   createdProfileIds.push(body.profile.id);
-  return { profile: body.profile, token: body.token as string };
+  return { profile: body.profile, token: body.token as string, refreshToken: body.refreshToken as string };
 }
 
 export function auth(token: string) {
