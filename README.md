@@ -8,7 +8,7 @@ CupThings is a lightweight Web app for logging personal drink and food experienc
 - CupThing create, list, detail, edit, and delete.
 - Category and date-range filtering.
 - Review for a selected date range with records, total count, category counts, and average rating.
-- No formal login, images, maps, social features, AI narration, or cross-device recovery in the MVP.
+- No password login, MFA, images, maps, social features, AI narration, or native mobile apps in the MVP.
 
 ## Workspace
 
@@ -41,6 +41,9 @@ The Web app defaults to `http://localhost:5173` and proxies `/api` to the API at
 - `VITE_API_URL`: optional frontend API base URL, default `/api` (the Vite development proxy).
 - `TEST_DATABASE_URL`: required for API tests when `NODE_ENV=test`; it must point to a database whose name ends in `_test`.
 - `TRUST_PROXY`: set to `true` only when the API runs behind a trusted reverse proxy, so profile creation rate limiting can use the original client IP.
+- `EMAIL_PROVIDER`: `console` for local development, or `smtp` for delivery through `SMTP_URL`.
+- `EMAIL_FROM`: required when `EMAIL_PROVIDER=smtp`; sender address used for Magic Links.
+- `COOKIE_SECURE`: set to `true` when serving over HTTPS. Production also enables secure cookies by default.
 
 The API and Drizzle config load `apps/api/.env` automatically when commands are run from `apps/api` or through the provided pnpm scripts.
 
@@ -48,7 +51,7 @@ For API tests, create a separate test database and copy `apps/api/.env.example` 
 
 ## Identity and Recovery
 
-Users can continue anonymously, or sign in with an email Magic Link. An anonymous profile can be attached to the verified email account; if that email already owns another profile, the anonymous records are merged into the existing profile. The API uses short-lived access tokens and rotating refresh tokens, with one active session per profile. Web sessions use HttpOnly cookies, while future API clients can use Bearer tokens.
+Users can continue anonymously, or sign in with an email Magic Link. The first verified email becomes the account identity; one email maps to one profile. An anonymous profile can be attached to that account, and if the email already owns another profile, the anonymous records are merged into the existing profile. The API uses 15-minute access tokens and rotating 30-day refresh tokens, with one active session per profile. Web sessions use HttpOnly cookies, while API clients can use Bearer tokens. Local development uses a console email provider and prints the link to the API log; production SMTP delivery requires `SMTP_URL` and `EMAIL_FROM`.
 
 ## API Overview
 
@@ -66,7 +69,7 @@ Users can continue anonymously, or sign in with an email Magic Link. An anonymou
 - `DELETE /cup-things/:id`: delete one record.
 - `GET /reviews`: return records and simple stats for a date range, optionally filtered by `category`.
 
-All endpoints except `POST /profiles` require `Authorization: Bearer <token>`.
+`POST /profiles`, `POST /auth/request-link`, `POST /auth/verify`, and `POST /auth/refresh` are public entry points. Account and CupThing operations require the active session through Web cookies or `Authorization: Bearer <token>`.
 
 ## Data Model and Validation
 
@@ -86,10 +89,10 @@ Categories are fixed to `coffee`, `wine`, `dessert`, and `other`. `name`, `categ
 
 ## Troubleshooting
 
-If the browser shows a network error, first check that the API is running on port `4000` and that `/ready` returns success. When using a direct `VITE_API_URL`, make sure the URL points to the development machine rather than `localhost` on another device, and add the Web origin to `WEB_ORIGINS`. Site storage must be enabled because it holds the anonymous profile token.
+If the browser shows a network error, first check that the API is running on port `4000` and that `/ready` returns success. When using a direct `VITE_API_URL`, make sure the URL points to the development machine rather than `localhost` on another device, and add the Web origin to `WEB_ORIGINS`. Site storage is needed to keep an anonymous profile token; signed-in Web sessions use HttpOnly cookies.
 
-Database backup and restore procedures are documented in [`docs/DATABASE_BACKUP.md`](docs/DATABASE_BACKUP.md). Recovery token export/import is intentionally deferred for now.
+Database backup and restore procedures are documented in [`docs/DATABASE_BACKUP.md`](docs/DATABASE_BACKUP.md). Recovery token export/import is intentionally not part of the email account flow.
 
 ## Current Limitations
 
-The MVP does not include formal login, cross-device recovery, pagination, image upload, maps, social features, native mobile apps, WeChat mini program support, or AI narration.
+The MVP does not include password login, MFA, cross-device session management, pagination, image upload, maps, social features, native mobile apps, WeChat mini program support, or AI narration.
