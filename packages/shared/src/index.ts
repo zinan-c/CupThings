@@ -6,14 +6,25 @@ export const cupThingCategorySchema = z.enum(cupThingCategories);
 
 export type CupThingCategory = z.infer<typeof cupThingCategorySchema>;
 
+export const cupThingFieldLimits = {
+  displayName: 80,
+  name: 120,
+  location: 120,
+  style: 120,
+  notes: 2000,
+  flavor: 40,
+  flavors: 20
+} as const;
+
 const trimmedRequiredString = z
   .string()
   .trim()
   .min(1, "Required");
 
-const optionalTrimmedString = z
+const optionalTrimmedString = (maxLength: number) => z
   .string()
   .trim()
+  .max(maxLength)
   .transform((value) => (value.length === 0 ? undefined : value))
   .optional();
 
@@ -31,26 +42,26 @@ export const uuidParamSchema = z.object({
   id: z.string().uuid("Invalid id")
 });
 
-export const displayNameSchema = trimmedRequiredString.max(80);
+export const displayNameSchema = trimmedRequiredString.max(cupThingFieldLimits.displayName);
 
 export const createProfileSchema = z.object({
   displayName: displayNameSchema
 });
 
 export const flavorsSchema = z
-  .array(z.string().trim().min(1).max(40))
-  .max(20)
+  .array(z.string().trim().min(1).max(cupThingFieldLimits.flavor))
+  .max(cupThingFieldLimits.flavors)
   .default([]);
 
 export const createCupThingSchema = z.object({
-  name: trimmedRequiredString.max(120),
+  name: trimmedRequiredString.max(cupThingFieldLimits.name),
   category: cupThingCategorySchema,
   consumedAt: isoDateTimeSchema,
-  location: optionalTrimmedString,
-  style: optionalTrimmedString,
+  location: optionalTrimmedString(cupThingFieldLimits.location),
+  style: optionalTrimmedString(cupThingFieldLimits.style),
   flavors: flavorsSchema,
   rating: ratingSchema.optional(),
-  notes: optionalTrimmedString
+  notes: optionalTrimmedString(cupThingFieldLimits.notes)
 });
 
 export const updateCupThingSchema = createCupThingSchema.partial().refine(

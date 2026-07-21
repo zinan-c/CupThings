@@ -40,6 +40,7 @@ The Web app defaults to `http://localhost:5173` and proxies `/api` to the API at
 - `WEB_ORIGINS`: optional comma-separated CORS origins for direct API access. Defaults to localhost and 127.0.0.1 Web origins. `WEB_ORIGIN` remains supported for a single origin.
 - `VITE_API_URL`: optional frontend API base URL, default `/api` (the Vite development proxy).
 - `TEST_DATABASE_URL`: required for API tests when `NODE_ENV=test`; it must point to a database whose name ends in `_test`.
+- `TRUST_PROXY`: set to `true` only when the API runs behind a trusted reverse proxy, so profile creation rate limiting can use the original client IP.
 
 The API and Drizzle config load `apps/api/.env` automatically when commands are run from `apps/api` or through the provided pnpm scripts.
 
@@ -64,7 +65,7 @@ All endpoints except `POST /profiles` require `Authorization: Bearer <token>`.
 
 ## Data Model and Validation
 
-Categories are fixed to `coffee`, `wine`, `dessert`, and `other`. `name`, `category`, and `consumedAt` are required. `rating` is optional and supports 1 to 5 in 0.5 increments. Review and filter ranges use inclusive start and end instants supplied by the Web app from local date selections.
+Categories are fixed to `coffee`, `wine`, `dessert`, and `other`. `name`, `category`, and `consumedAt` are required. `rating` is optional and supports 1 to 5 in 0.5 increments. `displayName` and `name` are limited to 80 and 120 characters; `location` and `style` to 120; `notes` to 2,000; and flavors to 20 values of 40 characters each. API requests are limited to 32 KB, and profile creation is limited to 5 attempts per IP per minute. Review and filter ranges use inclusive start and end instants supplied by the Web app from local date selections.
 
 ## Development Commands
 
@@ -74,12 +75,15 @@ Categories are fixed to `coffee`, `wine`, `dessert`, and `other`. `name`, `categ
 - `pnpm test`: run behavior tests.
 - `pnpm --filter @cupthings/api db:generate`: generate Drizzle migrations.
 - `pnpm --filter @cupthings/api db:migrate`: apply Drizzle migrations.
+- `CUPTHINGS_BACKUP_DIR=/var/backups/cupthings ./scripts/backup-postgres.sh`: create and retain a PostgreSQL backup.
 
 `GET /health` reports process liveness. `GET /ready` checks PostgreSQL readiness and returns `503` when the database is unavailable.
 
 ## Troubleshooting
 
 If the browser shows a network error, first check that the API is running on port `4000` and that `/ready` returns success. When using a direct `VITE_API_URL`, make sure the URL points to the development machine rather than `localhost` on another device, and add the Web origin to `WEB_ORIGINS`. Site storage must be enabled because it holds the anonymous profile token.
+
+Database backup and restore procedures are documented in [`docs/DATABASE_BACKUP.md`](docs/DATABASE_BACKUP.md). Recovery token export/import is intentionally deferred for now.
 
 ## Current Limitations
 

@@ -408,11 +408,11 @@ These are reasonable MVP tradeoffs and do not need immediate changes:
 - Review statistics load the selected records and aggregate them in Node. Move aggregation to SQL when record volume or pagination requires it.
 - Lists are not paginated. Add cursor pagination when real usage demonstrates the need.
 - Split the large `apps/web/src/App.tsx` into profile, records, form, Review, and rating feature modules.
-- Add reasonable maximum lengths for optional text fields and corresponding frontend `maxLength` hints.
+- Optional text field limits and frontend `maxLength` hints were added on 2026-07-21.
 - Use one source for category constants shared by API schema and domain validation.
 - Add linting, formatting, and CI checks for typecheck, test, and build.
 - Add graceful API shutdown that closes Fastify and the PostgreSQL pool.
-- Add basic rate limiting before exposing profile creation publicly.
+- Profile creation rate limiting was added on 2026-07-21.
 - Configure production caching explicitly for `index.html`, hashed assets, and private API responses.
 
 ## README improvements

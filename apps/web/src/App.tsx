@@ -8,6 +8,7 @@ import type {
   Profile,
   ReviewResponse
 } from "@cupthings/shared";
+import { cupThingFieldLimits } from "@cupthings/shared";
 import {
   AuthRequiredError,
   createCupThing,
@@ -197,7 +198,7 @@ function Welcome({ onReady }: { onReady: (profile: Profile) => void }) {
         <form className="panel welcomePanel" onSubmit={submit}>
           <label>
             Display name
-            <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Nic" autoFocus />
+            <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Nic" maxLength={cupThingFieldLimits.displayName} autoFocus />
           </label>
           {error && <p className="error">{error}</p>}
           <button className="primaryButton" disabled={saving || !displayName.trim()}>
@@ -442,7 +443,7 @@ function CupThingForm({
       </div>
       <label className="wide">
         Name
-        <input value={values.name} onChange={(event) => setValues({ ...values, name: event.target.value })} required />
+        <input value={values.name} onChange={(event) => setValues({ ...values, name: event.target.value })} maxLength={cupThingFieldLimits.name} required />
       </label>
       <label>
         Category
@@ -456,11 +457,11 @@ function CupThingForm({
       </label>
       <label>
         Location
-        <input value={values.location} onChange={(event) => setValues({ ...values, location: event.target.value })} />
+        <input value={values.location} onChange={(event) => setValues({ ...values, location: event.target.value })} maxLength={cupThingFieldLimits.location} />
       </label>
       <label>
         Style
-        <input value={values.style} onChange={(event) => setValues({ ...values, style: event.target.value })} />
+        <input value={values.style} onChange={(event) => setValues({ ...values, style: event.target.value })} maxLength={cupThingFieldLimits.style} />
       </label>
       <label>
         Rating
@@ -471,11 +472,11 @@ function CupThingForm({
       </label>
       <label className="wide">
         Flavors
-        <input value={values.flavors} onChange={(event) => setValues({ ...values, flavors: event.target.value })} placeholder="bright, creamy, citrus" />
+        <input value={values.flavors} onChange={(event) => setValues({ ...values, flavors: event.target.value })} maxLength={cupThingFieldLimits.flavors * (cupThingFieldLimits.flavor + 1) - 1} placeholder="bright, creamy, citrus" />
       </label>
       <label className="wide">
         Notes
-        <textarea value={values.notes} onChange={(event) => setValues({ ...values, notes: event.target.value })} rows={4} />
+        <textarea value={values.notes} onChange={(event) => setValues({ ...values, notes: event.target.value })} maxLength={cupThingFieldLimits.notes} rows={4} />
       </label>
       {error && <p className="error wide">{error}</p>}
       <div className="formActions wide">

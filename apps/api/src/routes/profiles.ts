@@ -7,7 +7,7 @@ import { parseInput, sendError } from "../http.js";
 import { toProfile } from "../mappers.js";
 
 export async function registerProfileRoutes(app: FastifyInstance) {
-  app.post("/profiles", async (request, reply) => {
+  app.post("/profiles", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (request, reply) => {
     try {
       const input = parseInput(createProfileSchema, request.body);
       const token = createAnonymousToken();

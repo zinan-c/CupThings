@@ -57,6 +57,16 @@ test("health and readiness expose process and database state", async () => {
   assert.deepEqual(ready.json(), { ok: true });
 });
 
+test("profile creation rejects oversized request bodies", async () => {
+  const response = await app.inject({
+    method: "POST",
+    url: "/profiles",
+    payload: { displayName: "x".repeat(40_000) }
+  });
+
+  assert.equal(response.statusCode, 413);
+});
+
 test("CupThing CRUD, filtering, review stats, profile isolation, and malformed UUID handling", async () => {
   const first = await createProfile("Test Profile One");
   const second = await createProfile("Test Profile Two");
@@ -120,6 +130,20 @@ test("CupThing CRUD, filtering, review stats, profile isolation, and malformed U
   });
   assert.equal(invalidRating.statusCode, 400);
 
+  const invalidNotes = await app.inject({
+    method: "POST",
+    url: "/cup-things",
+    headers: auth(first.token),
+    payload: {
+      name: "Too Much Notes",
+      category: "coffee",
+      consumedAt,
+      flavors: [],
+      notes: "x".repeat(2_001)
+    }
+  });
+  assert.equal(invalidNotes.statusCode, 400);
+
   const update = await app.inject({
     method: "PATCH",
     url: `/cup-things/${created.id}`,
@@ -154,6 +178,30 @@ test("CupThing CRUD, filtering, review stats, profile isolation, and malformed U
     headers: auth(first.token)
   });
   assert.equal(deleteResponse.statusCode, 204);
+});
+
+test("profile creation is rate limited per app instance", async () => {
+  const limitedApp = await buildApp();
+  try {
+    const responses = [];
+    for (let index = 0; index < 6; index += 1) {
+      responses.push(await limitedApp.inject({
+        method: "POST",
+        url: "/profiles",
+        payload: { displayName: `Rate Limit ${index}` }
+      }));
+    }
+
+    assert.deepEqual(responses.slice(0, 5).map((response) => response.statusCode), [201, 201, 201, 201, 201]);
+    assert.equal(responses[5]?.statusCode, 429);
+    assert.equal(responses[5]?.headers["retry-after"], "60");
+    for (const response of responses.slice(0, 5)) {
+      const id = response.json().profile.id as string;
+      createdProfileIds.push(id);
+    }
+  } finally {
+    await limitedApp.close();
+  }
 });
 
 async function createProfile(displayName: string) {

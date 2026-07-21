@@ -1,4 +1,5 @@
 import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
 import { sql } from "drizzle-orm";
 import { db } from "./db/client.js";
@@ -8,7 +9,9 @@ import { registerReviewRoutes } from "./routes/reviews.js";
 
 export async function buildApp() {
   const app = Fastify({
-    logger: true
+    logger: true,
+    bodyLimit: 32 * 1024,
+    trustProxy: process.env.TRUST_PROXY === "true"
   });
 
   const configuredOrigins = (process.env.WEB_ORIGINS ?? process.env.WEB_ORIGIN ?? "http://localhost:5173,http://127.0.0.1:5173")
@@ -17,6 +20,16 @@ export async function buildApp() {
     .filter(Boolean);
 
   await app.register(cors, { origin: configuredOrigins });
+  await app.register(rateLimit, {
+    global: false,
+    max: 5,
+    timeWindow: "1 minute",
+    errorResponseBuilder: () => ({
+      statusCode: 429,
+      error: "Too Many Requests",
+      message: "Too many profile creation attempts. Try again later."
+    })
+  });
 
   app.addHook("onSend", async (_request, reply) => {
     reply.header("Cache-Control", "no-store");
