@@ -3,7 +3,7 @@ import { after, test } from "node:test";
 import { eq } from "drizzle-orm";
 import { buildApp } from "./app.js";
 import { db, pool } from "./db/client.js";
-import { profiles } from "./db/schema.js";
+import { profiles, sessions } from "./db/schema.js";
 
 const app = await buildApp();
 const createdProfileIds: string[] = [];
@@ -31,7 +31,11 @@ test("profile creation returns a token and hashes it at rest", async () => {
 
   const [row] = await db.select().from(profiles).where(eq(profiles.id, body.profile.id));
   assert.ok(row);
-  assert.notEqual(row.tokenHash, body.token);
+  assert.ok(row);
+  const [session] = await db.select().from(sessions).where(eq(sessions.profileId, body.profile.id));
+  assert.ok(session);
+  assert.notEqual(session.accessTokenHash, body.token);
+  assert.equal(typeof body.refreshToken, "string");
 });
 
 test("missing and invalid tokens are rejected", async () => {
