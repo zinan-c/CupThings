@@ -7,6 +7,18 @@ import { HttpError } from "./http.js";
 
 export const ACCESS_TOKEN_TTL_MS = 15 * 60 * 1000;
 export const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+export const ACCESS_COOKIE_NAME = "cupthings.access";
+export const REFRESH_COOKIE_NAME = "cupthings.refresh";
+
+export function sessionCookieOptions(maxAgeMs: number) {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production" || process.env.COOKIE_SECURE === "true",
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: Math.floor(maxAgeMs / 1000)
+  };
+}
 
 export function createAccessToken() {
   return randomBytes(32).toString("base64url");
@@ -20,9 +32,20 @@ export function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export async function getProfileFromRequest(request: FastifyRequest) {
+export function getAccessTokenFromRequest(request: FastifyRequest) {
   const authHeader = request.headers.authorization;
-  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : undefined;
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.slice("Bearer ".length);
+  }
+  return request.cookies?.[ACCESS_COOKIE_NAME];
+}
+
+export function getRefreshTokenFromRequest(request: FastifyRequest, bodyToken?: string) {
+  return bodyToken ?? request.cookies?.[REFRESH_COOKIE_NAME];
+}
+
+export async function getAuthContextFromRequest(request: FastifyRequest) {
+  const token = getAccessTokenFromRequest(request);
 
   if (!token) {
     throw new HttpError(401, "Missing token");
@@ -48,9 +71,11 @@ export async function getProfileFromRequest(request: FastifyRequest) {
     .set({ lastUsedAt: now })
     .where(eq(sessions.id, result.session.id));
 
-  return result.profile;
+  return result;
 }
 
 export async function requireProfile(request: FastifyRequest, _reply: FastifyReply) {
-  request.profile = await getProfileFromRequest(request);
+  const result = await getAuthContextFromRequest(request);
+  request.profile = result.profile;
+  request.session = result.session;
 }

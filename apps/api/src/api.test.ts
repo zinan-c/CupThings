@@ -3,14 +3,19 @@ import { after, test } from "node:test";
 import { eq } from "drizzle-orm";
 import { buildApp } from "./app.js";
 import { db, pool } from "./db/client.js";
-import { profiles, sessions } from "./db/schema.js";
+import { accounts, profiles, sessions } from "./db/schema.js";
+import { getLastConsoleLoginLink } from "./email.js";
 
 const app = await buildApp();
 const createdProfileIds: string[] = [];
+const createdAccountIds: string[] = [];
 
 after(async () => {
   for (const id of createdProfileIds) {
     await db.delete(profiles).where(eq(profiles.id, id));
+  }
+  for (const id of createdAccountIds) {
+    await db.delete(accounts).where(eq(accounts.id, id));
   }
   await app.close();
   await pool.end();
@@ -48,6 +53,54 @@ test("missing and invalid tokens are rejected", async () => {
     headers: { authorization: "Bearer invalid-token" }
   });
   assert.equal(invalid.statusCode, 401);
+});
+
+test("Magic Link claims an anonymous profile, rotates sessions, and logs out", async () => {
+  const anonymous = await createProfile("Magic Link Anonymous");
+  const requestLink = await app.inject({
+    method: "POST",
+    url: "/auth/request-link",
+    headers: auth(anonymous.token),
+    payload: { email: "magic@example.com" }
+  });
+  assert.equal(requestLink.statusCode, 202);
+
+  const link = getLastConsoleLoginLink();
+  assert.ok(link);
+  const challengeToken = new URL(link).searchParams.get("token");
+  assert.ok(challengeToken);
+
+  const verified = await app.inject({
+    method: "POST",
+    url: "/auth/verify",
+    payload: { token: challengeToken }
+  });
+  assert.equal(verified.statusCode, 200);
+  const verifiedBody = verified.json();
+  assert.equal(verifiedBody.profile.id, anonymous.profile.id);
+  assert.equal(typeof verifiedBody.refreshToken, "string");
+
+  const [claimed] = await db.select().from(profiles).where(eq(profiles.id, anonymous.profile.id));
+  assert.ok(claimed?.accountId);
+  createdAccountIds.push(claimed.accountId);
+
+  const cookies = cookieHeader(verified.headers["set-cookie"]);
+  const me = await app.inject({ method: "GET", url: "/me", headers: { cookie: cookies } });
+  assert.equal(me.statusCode, 200);
+
+  const refreshed = await app.inject({ method: "POST", url: "/auth/refresh", headers: { cookie: cookies }, payload: {} });
+  assert.equal(refreshed.statusCode, 200);
+  const refreshedCookies = cookieHeader(refreshed.headers["set-cookie"]);
+  const oldAccess = await app.inject({ method: "GET", url: "/me", headers: { authorization: `Bearer ${verifiedBody.token}` } });
+  assert.equal(oldAccess.statusCode, 401);
+
+  const logout = await app.inject({ method: "POST", url: "/auth/logout", headers: { cookie: refreshedCookies } });
+  assert.equal(logout.statusCode, 204);
+  const afterLogout = await app.inject({ method: "GET", url: "/me", headers: { cookie: refreshedCookies } });
+  assert.equal(afterLogout.statusCode, 401);
+
+  const replay = await app.inject({ method: "POST", url: "/auth/verify", payload: { token: challengeToken } });
+  assert.equal(replay.statusCode, 401);
 });
 
 test("health and readiness expose process and database state", async () => {
@@ -222,4 +275,10 @@ async function createProfile(displayName: string) {
 
 function auth(token: string) {
   return { authorization: `Bearer ${token}` };
+}
+
+function cookieHeader(value: string | string[] | undefined) {
+  assert.ok(value);
+  const values = Array.isArray(value) ? value : [value];
+  return values.map((cookie) => cookie.split(";", 1)[0]).join("; ");
 }

@@ -48,6 +48,21 @@ export const createProfileSchema = z.object({
   displayName: displayNameSchema
 });
 
+export const emailSchema = z.string().trim().email().max(254).transform((value) => value.toLowerCase());
+
+export const requestLoginSchema = z.object({
+  email: emailSchema,
+  displayName: displayNameSchema.optional()
+});
+
+export const verifyLoginSchema = z.object({
+  token: z.string().trim().min(20).max(200)
+});
+
+export const refreshTokenSchema = z.object({
+  refreshToken: z.string().trim().min(20).max(200).optional()
+});
+
 export const flavorsSchema = z
   .array(z.string().trim().min(1).max(cupThingFieldLimits.flavor))
   .max(cupThingFieldLimits.flavors)
@@ -88,6 +103,9 @@ export const reviewQuerySchema = z.object({
 );
 
 export type CreateProfileInput = z.infer<typeof createProfileSchema>;
+export type RequestLoginInput = z.infer<typeof requestLoginSchema>;
+export type VerifyLoginInput = z.infer<typeof verifyLoginSchema>;
+export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>;
 export type CreateCupThingInput = z.infer<typeof createCupThingSchema>;
 export type UpdateCupThingInput = z.infer<typeof updateCupThingSchema>;
 export type CupThingListQuery = z.infer<typeof cupThingListQuerySchema>;

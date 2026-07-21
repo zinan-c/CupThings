@@ -42,6 +42,7 @@ export const sessions = pgTable("sessions", {
 export const loginChallenges = pgTable("login_challenges", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull(),
+  displayName: text("display_name"),
   tokenHash: text("token_hash").notNull().unique(),
   profileId: uuid("profile_id").references(() => profiles.id, { onDelete: "set null" }),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),

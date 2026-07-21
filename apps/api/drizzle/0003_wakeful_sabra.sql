@@ -1,0 +1,1 @@
+ALTER TABLE "login_challenges" ADD COLUMN "display_name" text;
