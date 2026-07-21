@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL ?? "/api";
+const API_URL = import.meta.env?.VITE_API_URL ?? "/api";
 const TOKEN_KEY = "cupthings.token";
 const STORAGE_MESSAGE = "Browser storage is unavailable. Enable site storage to keep your CupThings profile.";
 
