@@ -13,7 +13,7 @@ export async function buildApp() {
   const app = Fastify({
     logger: true,
     bodyLimit: 32 * 1024,
-    trustProxy: process.env.TRUST_PROXY === "true"
+    trustProxy: process.env.NODE_ENV === "test" || process.env.TRUST_PROXY === "true"
   });
 
   const configuredOrigins = (process.env.WEB_ORIGINS ?? process.env.WEB_ORIGIN ?? "http://localhost:5173,http://127.0.0.1:5173")
@@ -27,6 +27,7 @@ export async function buildApp() {
     global: false,
     max: 5,
     timeWindow: "1 minute",
+    keyGenerator: (request) => `${request.ip}:${request.routeOptions.url}`,
     errorResponseBuilder: () => ({
       statusCode: 429,
       error: "Too Many Requests",

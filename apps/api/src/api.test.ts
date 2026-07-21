@@ -103,6 +103,38 @@ test("Magic Link claims an anonymous profile, rotates sessions, and logs out", a
   assert.equal(replay.statusCode, 401);
 });
 
+test("account deletion removes the profile, records, and account", async () => {
+  const anonymous = await createProfile("Delete Me");
+  const requestLink = await app.inject({
+    method: "POST",
+    url: "/auth/request-link",
+    headers: auth(anonymous.token),
+    payload: { email: "delete@example.com" }
+  });
+  assert.equal(requestLink.statusCode, 202);
+  const link = getLastConsoleLoginLink();
+  assert.ok(link);
+  const token = new URL(link).searchParams.get("token");
+  assert.ok(token);
+
+  const verified = await app.inject({ method: "POST", url: "/auth/verify", payload: { token } });
+  assert.equal(verified.statusCode, 200);
+  const [profile] = await db.select().from(profiles).where(eq(profiles.id, anonymous.profile.id));
+  assert.ok(profile?.accountId);
+  createdAccountIds.push(profile.accountId);
+
+  const deleted = await app.inject({
+    method: "DELETE",
+    url: "/account",
+    headers: { cookie: cookieHeader(verified.headers["set-cookie"]) }
+  });
+  assert.equal(deleted.statusCode, 204);
+  const [deletedProfile] = await db.select().from(profiles).where(eq(profiles.id, anonymous.profile.id));
+  assert.equal(deletedProfile, undefined);
+  const [deletedAccount] = await db.select().from(accounts).where(eq(accounts.id, profile.accountId));
+  assert.equal(deletedAccount, undefined);
+});
+
 test("health and readiness expose process and database state", async () => {
   const health = await app.inject({ method: "GET", url: "/health" });
   assert.equal(health.statusCode, 200);
@@ -265,6 +297,7 @@ async function createProfile(displayName: string) {
   const response = await app.inject({
     method: "POST",
     url: "/profiles",
+    headers: { "x-forwarded-for": `10.0.0.${createdProfileIds.length + 1}` },
     payload: { displayName }
   });
   assert.equal(response.statusCode, 201);

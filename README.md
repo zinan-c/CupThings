@@ -48,11 +48,16 @@ For API tests, create a separate test database and copy `apps/api/.env.example` 
 
 ## Identity and Recovery
 
-MVP identity is anonymous and browser-bound. After the user submits a display name, the API returns a token and the Web app stores it in browser storage. Clearing browser storage or changing devices loses access to that MVP profile.
+Users can continue anonymously, or sign in with an email Magic Link. An anonymous profile can be attached to the verified email account; if that email already owns another profile, the anonymous records are merged into the existing profile. The API uses short-lived access tokens and rotating refresh tokens, with one active session per profile. Web sessions use HttpOnly cookies, while future API clients can use Bearer tokens.
 
 ## API Overview
 
 - `POST /profiles`: create an anonymous profile and return a Bearer token.
+- `POST /auth/request-link`: request an email Magic Link.
+- `POST /auth/verify`: consume a Magic Link and create the active session.
+- `POST /auth/refresh`: rotate the refresh token and issue a new access token.
+- `POST /auth/logout`: revoke the active session.
+- `DELETE /account`: permanently delete the current account, profile, and CupThings.
 - `GET /me`: return the current profile.
 - `POST /cup-things`: create a record.
 - `GET /cup-things`: list records, optionally filtered by `category`, `from`, and `to`.

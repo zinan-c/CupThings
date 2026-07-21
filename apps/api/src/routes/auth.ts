@@ -198,6 +198,17 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     clearSessionCookies(reply);
     return reply.status(204).send();
   });
+
+  app.delete("/account", { preHandler: requireProfile }, async (request, reply) => {
+    await db.transaction(async (tx) => {
+      await tx.delete(profiles).where(eq(profiles.id, request.profile.id));
+      if (request.profile.accountId) {
+        await tx.delete(accounts).where(eq(accounts.id, request.profile.accountId));
+      }
+    });
+    clearSessionCookies(reply);
+    return reply.status(204).send();
+  });
 }
 
 function setSessionCookies(reply: FastifyReply, accessToken: string, refreshToken: string) {
