@@ -27,6 +27,31 @@ export function clearToken() {
   }
 }
 
+export async function requestLogin(email: string, displayName?: string) {
+  return request<{ message: string }>("/auth/request-link", {
+    method: "POST",
+    body: { email, displayName }
+  });
+}
+
+export async function verifyLogin(token: string) {
+  const result = await request<{ profile: Profile; token: string; refreshToken: string }>("/auth/verify", {
+    method: "POST",
+    body: { token },
+    auth: false
+  });
+  clearToken();
+  return result;
+}
+
+export async function logoutSession() {
+  return request<void>("/auth/logout", { method: "POST" });
+}
+
+export async function deleteAccount() {
+  return request<void>("/account", { method: "DELETE" });
+}
+
 type RequestOptions = {
   method?: string;
   body?: unknown;
@@ -76,9 +101,14 @@ export function isStorageAvailable() {
   }
 }
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function request<T>(path: string, options: RequestOptions = {}, retried = false): Promise<T> {
   const headers = new Headers();
-  const token = getToken();
+  let token: string | null = null;
+  try {
+    token = getToken();
+  } catch (error) {
+    if (!(error instanceof StorageUnavailableError)) throw error;
+  }
 
   if (options.body != null) {
     headers.set("Content-Type", "application/json");
@@ -100,7 +130,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       headers,
       body: options.body == null ? undefined : JSON.stringify(options.body),
       signal,
-      cache: "no-store"
+      cache: "no-store",
+      credentials: "include"
     });
   } catch (error) {
     if (options.signal?.aborted) throw error;
@@ -110,6 +141,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (response.status === 401) {
+    if (!retried && !token && path !== "/auth/refresh" && path !== "/auth/verify") {
+      const refreshed = await refreshSession();
+      if (refreshed) return request<T>(path, options, true);
+    }
     clearToken();
     window.dispatchEvent(new Event("cupthings:auth-required"));
     throw new AuthRequiredError();
@@ -125,6 +160,21 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   return response.json() as Promise<T>;
+}
+
+async function refreshSession() {
+  try {
+    const response = await fetch(`${API_URL}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+      cache: "no-store",
+      credentials: "include"
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 export async function createProfile(displayName: string) {

@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { ArrowLeft, CalendarDays, Check, Edit3, Plus, Search, Star, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarDays, Check, Edit3, LogOut, Mail, Plus, Search, Star, Trash2 } from "lucide-react";
 import type {
   CreateCupThingInput,
   CupThing,
@@ -17,12 +17,15 @@ import {
   getCupThing,
   getMe,
   getReview,
-  getToken,
   isStorageAvailable,
   listCupThings,
+  deleteAccount,
+  logoutSession,
+  requestLogin,
   setToken,
   StorageUnavailableError,
-  updateCupThing
+  updateCupThing,
+  verifyLogin
 } from "./api";
 import { categoryLabels, categoryOptions } from "./constants";
 import { getStarSelectionValues } from "./rating";
@@ -61,6 +64,7 @@ export function App() {
   const [profileError, setProfileError] = useState("");
   const [profileCheckAttempt, setProfileCheckAttempt] = useState(0);
   const [view, setView] = useState<View>({ name: "home" });
+  const isAuthCallback = window.location.pathname === "/auth/verify";
 
   useEffect(() => {
     function handleAuthRequired() {
@@ -71,13 +75,7 @@ export function App() {
 
     window.addEventListener("cupthings:auth-required", handleAuthRequired);
 
-    try {
-      if (!getToken()) {
-        setCheckingProfile(false);
-        return () => window.removeEventListener("cupthings:auth-required", handleAuthRequired);
-      }
-    } catch (error) {
-      setProfileError(error instanceof Error ? error.message : "Browser storage is unavailable");
+    if (isAuthCallback) {
       setCheckingProfile(false);
       return () => window.removeEventListener("cupthings:auth-required", handleAuthRequired);
     }
@@ -93,7 +91,27 @@ export function App() {
       .finally(() => setCheckingProfile(false));
 
     return () => window.removeEventListener("cupthings:auth-required", handleAuthRequired);
-  }, [profileCheckAttempt]);
+  }, [isAuthCallback, profileCheckAttempt]);
+
+  async function signOut() {
+    try {
+      await logoutSession();
+    } finally {
+      setProfile(null);
+      setView({ name: "home" });
+    }
+  }
+
+  async function removeAccount() {
+    if (!window.confirm("Delete your account and all CupThings permanently?")) return;
+    await deleteAccount();
+    setProfile(null);
+    setView({ name: "home" });
+  }
+
+  if (isAuthCallback) {
+    return <VerifyLogin token={new URLSearchParams(window.location.search).get("token")} onReady={setProfile} />;
+  }
 
   if (checkingProfile) {
     return <Shell title="CupThings"><p className="muted">Loading your profile...</p></Shell>;
@@ -119,9 +137,13 @@ export function App() {
     <Shell
       title="CupThings"
       action={
-        <button className="iconTextButton" onClick={() => setView({ name: "new" })}>
-          <Plus size={18} /> New
-        </button>
+        <div className="buttonCluster">
+          <button className="iconTextButton" onClick={() => setView({ name: "new" })}>
+            <Plus size={18} /> New
+          </button>
+          {profile.hasAccount && <button className="iconButton" aria-label="Sign out" title="Sign out" onClick={signOut}><LogOut size={18} /></button>}
+          {profile.hasAccount && <button className="iconButton danger" aria-label="Delete account" title="Delete account" onClick={removeAccount}><Trash2 size={18} /></button>}
+        </div>
       }
     >
       <div className="topbar">
@@ -167,6 +189,10 @@ function Welcome({ onReady }: { onReady: (profile: Profile) => void }) {
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [email, setEmail] = useState("");
+  const [loginDisplayName, setLoginDisplayName] = useState("");
+  const [loginMessage, setLoginMessage] = useState("");
+  const [loginSaving, setLoginSaving] = useState(false);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -187,6 +213,20 @@ function Welcome({ onReady }: { onReady: (profile: Profile) => void }) {
     }
   }
 
+  async function requestMagicLink(event: FormEvent) {
+    event.preventDefault();
+    setLoginMessage("");
+    setLoginSaving(true);
+    try {
+      const result = await requestLogin(email, loginDisplayName || undefined);
+      setLoginMessage(result.message);
+    } catch (error) {
+      setLoginMessage(error instanceof Error ? error.message : "Could not request a sign-in link");
+    } finally {
+      setLoginSaving(false);
+    }
+  }
+
   return (
     <Shell title="CupThings">
       <section className="welcome">
@@ -195,16 +235,57 @@ function Welcome({ onReady }: { onReady: (profile: Profile) => void }) {
           <h1>Start your personal taste log</h1>
           <p className="muted">Keep simple notes on the drinks and desserts you want to remember.</p>
         </div>
-        <form className="panel welcomePanel" onSubmit={submit}>
-          <label>
-            Display name
-            <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Nic" maxLength={cupThingFieldLimits.displayName} autoFocus />
-          </label>
-          {error && <p className="error">{error}</p>}
-          <button className="primaryButton" disabled={saving || !displayName.trim()}>
-            <Check size={18} /> Continue
-          </button>
-        </form>
+        <div className="welcomeForms">
+          <form className="panel welcomePanel" onSubmit={submit}>
+            <label>
+              Display name
+              <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Nic" maxLength={cupThingFieldLimits.displayName} autoFocus />
+            </label>
+            {error && <p className="error">{error}</p>}
+            <button className="primaryButton" disabled={saving || !displayName.trim()}>
+              <Check size={18} /> Continue anonymously
+            </button>
+          </form>
+          <form className="panel welcomePanel" onSubmit={requestMagicLink}>
+            <div className="formHeader"><h2>Sign in with email</h2></div>
+            <label>
+              Email
+              <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" maxLength={254} required />
+            </label>
+            <label>
+              Display name <span className="muted">(new accounts only)</span>
+              <input value={loginDisplayName} onChange={(event) => setLoginDisplayName(event.target.value)} maxLength={80} placeholder="Nic" />
+            </label>
+            {loginMessage && <p className={loginMessage.startsWith("If ") ? "success" : "error"}>{loginMessage}</p>}
+            <button className="ghostButton" disabled={loginSaving}><Mail size={18} /> Send Magic Link</button>
+          </form>
+        </div>
+      </section>
+    </Shell>
+  );
+}
+
+function VerifyLogin({ token, onReady }: { token: string | null; onReady: (profile: Profile) => void }) {
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!token) {
+      setError("This sign-in link is missing a token.");
+      return;
+    }
+
+    verifyLogin(token)
+      .then(({ profile }) => {
+        window.history.replaceState({}, "", "/");
+        onReady(profile);
+      })
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "This sign-in link is invalid or expired."));
+  }, [token, onReady]);
+
+  return (
+    <Shell title="CupThings">
+      <section className="emptyState">
+        {error ? <><h2>Sign-in link unavailable</h2><p className="error">{error}</p></> : <><h2>Signing you in...</h2><p className="muted">Your CupThings profile will open in a moment.</p></>}
       </section>
     </Shell>
   );

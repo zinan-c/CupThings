@@ -115,6 +115,7 @@ export type UuidParam = z.infer<typeof uuidParamSchema>;
 export type Profile = {
   id: string;
   displayName: string;
+  hasAccount: boolean;
   createdAt: string;
   updatedAt: string;
 };

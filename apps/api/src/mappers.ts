@@ -8,6 +8,7 @@ export function toProfile(row: ProfileRow): Profile {
   return {
     id: row.id,
     displayName: row.displayName,
+    hasAccount: row.accountId != null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };
